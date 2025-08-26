@@ -1,6 +1,6 @@
 export interface Project {
   id: number;
-  rowIndex?: number; // Índice real da linha na planilha
+  rowIndex?: number;
   nPedido: string;
   cliente: string;
   codigo: string;
@@ -16,4 +16,5 @@ export interface Project {
   consultor: string;
   faturado: string;
   observacao: string;
+  historico: string;
 }

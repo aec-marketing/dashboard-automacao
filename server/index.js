@@ -7,9 +7,108 @@ import { google } from 'googleapis';
 
 dotenv.config();
 
+// Configuração de mapeamento das colunas da planilha
+const COLUMN_MAPPING = {
+  nPedido: 'A',
+  cliente: 'B', 
+  codigo: 'C',
+  quantidade: 'D',
+  descricao: 'E',
+  prioridade: 'F',
+  progresso: 'G',
+  status: 'H',
+  dataEntradaPlanejamento: 'I',
+  entregaEstimada: 'J',
+  dataInicio: 'K',
+  dataFim: 'L',
+  consultor: 'M',
+  faturado: 'N',
+  observacao: 'O',
+  historico: 'P'
+};
+
+// Função utilitária para converter letra da coluna em índice
+function columnToIndex(column) {
+  return column.charCodeAt(0) - 'A'.charCodeAt(0);
+}
+
+// Função utilitária para gerar o range dinamicamente
+function generateRange(rowIndex) {
+  const columns = Object.values(COLUMN_MAPPING);
+  const firstCol = columns[0]; // A
+  const lastCol = columns[columns.length - 1]; // O
+  return `01-PAINEL DE CONTROLE!${firstCol}${rowIndex}:${lastCol}${rowIndex}`;
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
+// Função para converter data DD/MM/YYYY para YYYY-MM-DD
+function convertDateToISO(dateString) {
+  if (!dateString || dateString.trim() === '') return '';
+  
+  // Se já está no formato ISO, retorna como está
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString;
+  
+  // Converte DD/MM/YYYY para YYYY-MM-DD
+  const parts = dateString.split('/');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  
+  return dateString; // Se não conseguir converter, retorna original
+}
 
+// Função para converter data YYYY-MM-DD para DD/MM/YYYY
+function convertDateToBR(dateString) {
+  if (!dateString || dateString.trim() === '') return '';
+  
+  // Se já está no formato BR, retorna como está
+  if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) return dateString;
+  
+  // Converte YYYY-MM-DD para DD/MM/YYYY
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}/${month}/${year}`;
+  }
+  
+  return dateString; // Se não conseguir converter, retorna original
+}
+
+
+// Função para gerar data no formato DD/MM
+function getCurrentDateBR() {
+  const now = new Date();
+  const day = now.getDate().toString().padStart(2, '0');
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  return `${day}/${month}`;
+}
+
+// Função para adicionar nova nota ao histórico
+function addToHistory(currentHistory, newNote) {
+  if (!newNote || newNote.trim() === '') return currentHistory;
+  
+  const datePrefix = getCurrentDateBR();
+  const formattedNote = `${datePrefix} - ${newNote.trim()}`;
+  
+  if (!currentHistory || currentHistory.trim() === '') {
+    return formattedNote;
+  }
+  
+  return `${currentHistory} | ${formattedNote}`;
+}
+
+// Função para parsear histórico em array
+function parseHistory(historyString) {
+  if (!historyString || historyString.trim() === '') return [];
+  
+  return historyString.split('|').map(item => item.trim()).filter(item => item);
+}
 // Middlewares
 app.use(helmet());
 app.use(cors());
@@ -42,21 +141,22 @@ async function fetchSheetsData() {
     return rows.map((row, index) => ({
       id: index + 1,
       rowIndex: index + 9, // Começa na linha 9
-      nPedido: row[0] || '',
-      cliente: row[1] || '',
-      codigo: row[2] || '',
-      quantidade: row[3] || '',
-      descricao: row[4] || '',
-      prioridade: row[5] || '',
-      progresso: parseInt(row[6]) || 0,
-      status: row[7] || '',
-      dataEntradaPlanejamento: row[8] || '',
-      entregaEstimada: row[9] || '',
-      dataInicio: row[10] || '',
-      dataFim: row[11] || '',
-      consultor: row[12] || '',
-      faturado: row[13] || '',
-      observacao: row[14] || ''
+      nPedido: row[columnToIndex(COLUMN_MAPPING.nPedido)] || '',
+      cliente: row[columnToIndex(COLUMN_MAPPING.cliente)] || '',
+      codigo: row[columnToIndex(COLUMN_MAPPING.codigo)] || '',
+      quantidade: row[columnToIndex(COLUMN_MAPPING.quantidade)] || '',
+      descricao: row[columnToIndex(COLUMN_MAPPING.descricao)] || '',
+      prioridade: row[columnToIndex(COLUMN_MAPPING.prioridade)] || '',
+      progresso: parseInt(row[columnToIndex(COLUMN_MAPPING.progresso)]) || 0,
+      status: row[columnToIndex(COLUMN_MAPPING.status)] || '',
+      dataEntradaPlanejamento: convertDateToISO(row[columnToIndex(COLUMN_MAPPING.dataEntradaPlanejamento)] || ''),
+      entregaEstimada: convertDateToISO(row[columnToIndex(COLUMN_MAPPING.entregaEstimada)] || ''),
+      dataInicio: convertDateToISO(row[columnToIndex(COLUMN_MAPPING.dataInicio)] || ''),
+      dataFim: convertDateToISO(row[columnToIndex(COLUMN_MAPPING.dataFim)] || ''),
+      consultor: row[columnToIndex(COLUMN_MAPPING.consultor)] || '',
+      faturado: row[columnToIndex(COLUMN_MAPPING.faturado)] || '',
+      observacao: row[columnToIndex(COLUMN_MAPPING.observacao)] || '',
+      historico: row[columnToIndex(COLUMN_MAPPING.historico)] || ''  // <- ADICIONE ESTA LINHA
     }));
   } catch (error) {
     console.error('Erro ao buscar dados do Google Sheets:', error);
@@ -76,9 +176,10 @@ async function getCachedData() {
 // Função para encontrar a última linha com dados
 async function findLastDataRow() {
   try {
+    const clienteColumn = COLUMN_MAPPING.cliente;
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-      range: '01-PAINEL DE CONTROLE!B9:B1000', // Coluna cliente
+      range: `01-PAINEL DE CONTROLE!${clienteColumn}9:${clienteColumn}1000`,
     });
     
     const rows = response.data.values || [];
@@ -96,7 +197,6 @@ async function findLastDataRow() {
     return 9;
   }
 }
-
 // Função para inserir nova linha na planilha
 async function insertNewRowAfter(rowIndex) {
   try {
@@ -154,17 +254,16 @@ async function addProjectToSheet(projectData) {
       projectData.prioridade,
       projectData.progresso,
       projectData.status,
-      projectData.dataEntradaPlanejamento,
-      projectData.entregaEstimada,
-      projectData.dataInicio,
-      projectData.dataFim,
+      convertDateToBR(projectData.dataEntradaPlanejamento),
+      convertDateToBR(projectData.entregaEstimada),
+      convertDateToBR(projectData.dataInicio),
+      convertDateToBR(projectData.dataFim),
       projectData.consultor,
       projectData.faturado,
       projectData.observacao
     ]];
 
-    const range = `01-PAINEL DE CONTROLE!A${newRowIndex}:O${newRowIndex}`;
-    console.log('4. Preenchendo range:', range);
+const range = generateRange(newRowIndex);
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
@@ -203,10 +302,11 @@ async function updateProjectInSheet(rowIndex, projectData) {
       projectData.dataFim,
       projectData.consultor,
       projectData.faturado,
-      projectData.observacao
+      projectData.observacao,
+      projectData.historico || ''
     ]];
 
-    const range = `01-PAINEL DE CONTROLE!A${rowIndex}:O${rowIndex}`;
+const range = generateRange(rowIndex);
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
@@ -286,7 +386,8 @@ app.post('/api/projects', async (req, res) => {
       dataFim: req.body.dataFim || '',
       consultor: req.body.consultor || '',
       faturado: req.body.faturado || '',
-      observacao: req.body.observacao || ''
+      observacao: req.body.observacao || '',
+      historico: req.body.historico || ''      
     };
 
     await addProjectToSheet(projectData);
@@ -325,7 +426,9 @@ app.put('/api/projects/:id', async (req, res) => {
       dataFim: req.body.dataFim || '',
       consultor: req.body.consultor || '',
       faturado: req.body.faturado || '',
-      observacao: req.body.observacao || ''
+      observacao: req.body.observacao || '',
+      historico: req.body.historico || ''
+
     };
 
     await updateProjectInSheet(project.rowIndex, projectData);
