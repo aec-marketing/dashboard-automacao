@@ -1,10 +1,12 @@
-import { Container, Typography, Card, CardContent, Box, Button, Chip, LinearProgress, IconButton, ToggleButton, ToggleButtonGroup, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
-import { useState, useEffect } from 'react';
-import { Add, Refresh, ChevronLeft, ChevronRight, ViewList, ViewModule } from '@mui/icons-material';
+import { Container, Typography, Card, CardContent, Box, Button, Chip, LinearProgress, IconButton, ToggleButton, ToggleButtonGroup, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, InputAdornment, Skeleton, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Add, Refresh, ChevronLeft, ChevronRight, ViewList, ViewModule, Search, Clear } from '@mui/icons-material';
 import { getProjectsInProgress, getProjectsPending, getProjectsNotStarted, getProjectsCompleted, getProjectsInPlanning, getProjectsStopped, createProject, updateProject, refreshData } from '../services/api';
 import type { Project } from '../types';
 import ProjectForm from '../components/ProjectForm';
 import ProjectDetailModal from '../components/ProjectDetailModal.tsx';
+import { useNotification } from '../contexts/types';
+
 
 function Dashboard() {
   const [projectsInProgress, setProjectsInProgress] = useState<Project[]>([]);
@@ -32,132 +34,338 @@ function Dashboard() {
 // Estado para o modal de detalhes
 const [detailModalOpen, setDetailModalOpen] = useState(false);
 const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+const [isRefreshing, setIsRefreshing] = useState(false);
+const [isCreating, setIsCreating] = useState(false);
+const [searchQuery, setSearchQuery] = useState('');
+const [priorityFilter, setPriorityFilter] = useState<string>('');
+const [clientFilter, setClientFilter] = useState<string>('');
+  const { showSuccess, showError, showInfo } = useNotification();
 
   // Função para obter todos os projetos (exceto concluídos)
-  const getAllActiveProjects = () => {
-    return [
-      ...projectsNotStarted,
-      ...projectsPlanning,
-      ...projectsInProgress,
-      ...projectsStopped,
-      ...projectsPending
-    ].sort((a, b) => {
-      // Ordenar por prioridade primeiro (P0 primeiro)
-      if (a.prioridade !== b.prioridade) {
-        return (a.prioridade || 'P2').localeCompare(b.prioridade || 'P2');
-      }
-      // Depois por status
-      return (a.status || '').localeCompare(b.status || '');
-    });
-  };
+const getAllActiveProjects = () => {
+  const allProjects = [
+    ...projectsNotStarted,
+    ...projectsPlanning,
+    ...projectsInProgress,
+    ...projectsStopped,
+    ...projectsPending
+  ].sort((a, b) => {
+    // Ordenar por prioridade primeiro (P0 primeiro)
+    if (a.prioridade !== b.prioridade) {
+      return (a.prioridade || 'P2').localeCompare(b.prioridade || 'P2');
+    }
+    // Depois por status
+    return (a.status || '').localeCompare(b.status || '');
+  });
+  
+  return getFilteredProjects(allProjects);
+};
 
   // Função para obter projetos do status atual
-  const getCurrentProjects = () => {
-    switch (selectedStatus) {
-      case 'notStarted': return projectsNotStarted;
-      case 'planning': return projectsPlanning;
-      case 'inProgress': return projectsInProgress;
-      case 'stopped': return projectsStopped;
-      case 'pending': return projectsPending;
-      default: return projectsInProgress;
-    }
-  };
+const getCurrentProjects = () => {
+  let projects: Project[] = [];
+  switch (selectedStatus) {
+    case 'notStarted': projects = projectsNotStarted; break;
+    case 'planning': projects = projectsPlanning; break;
+    case 'inProgress': projects = projectsInProgress; break;
+    case 'stopped': projects = projectsStopped; break;
+    case 'pending': projects = projectsPending; break;
+    default: projects = projectsInProgress;
+  }
+  
+  return getFilteredProjects(projects);
+};
+const getFilteredProjects = (projects: Project[]) => {
+  let filtered = projects;
+  
+  // Filtro de busca textual
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase().trim();
+    filtered = filtered.filter(project => 
+      (project.codigo?.toLowerCase() || '').includes(query) ||
+      (project.cliente?.toLowerCase() || '').includes(query) ||
+      (project.descricao?.toLowerCase() || '').includes(query) ||
+      (project.nPedido?.toLowerCase() || '').includes(query)
+    );
+  }
+  
+  // Filtro de prioridade
+  if (priorityFilter) {
+    filtered = filtered.filter(project => 
+      project.prioridade?.includes(priorityFilter)
+    );
+  }
+  
+  // Filtro de cliente
+  if (clientFilter) {
+    filtered = filtered.filter(project => 
+      project.cliente?.toLowerCase().includes(clientFilter.toLowerCase())
+    );
+  }
+  
+  return filtered;
+};
+const getUniquePriorities = () => {
+  const allProjects = [
+    ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+    ...projectsStopped, ...projectsPending
+  ];
+  const priorities = [...new Set(allProjects.map(p => p.prioridade).filter(Boolean))];
+  return priorities.sort();
+};
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [inProgress, pending, notStarted, planning, stopped, completed] = await Promise.all([
-        getProjectsInProgress(),    // S2 - Em Andamento
-        getProjectsPending(),       // S4 - Pendências
-        getProjectsNotStarted(),    // S0 - Não iniciado
-        getProjectsInPlanning(),    // S1 - Em Planejamento
-        getProjectsStopped(),       // S3 - Parado
-        getProjectsCompleted()      // S6 - Concluído
-      ]);
-      
-      setProjectsInProgress(inProgress);
-      setProjectsPending(pending);
-      setProjectsNotStarted(notStarted);
-      setProjectsPlanning(planning);
-      setProjectsStopped(stopped);
-      setProjectsCompleted(completed);
-    } catch (error) {
-      console.error('Erro ao carregar projetos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+const getUniqueClients = () => {
+  const allProjects = [
+    ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+    ...projectsStopped, ...projectsPending
+  ];
+  const clients = [...new Set(allProjects.map(p => p.cliente).filter(Boolean))];
+  return clients.sort();
+};
+const renderCardSkeletons = () => {
+  return Array.from({ length: 6 }, (_, index) => (
+    <Card key={index} sx={{ height: '220px' }}>
+      <CardContent sx={{ height: '100%' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+          <Skeleton variant="text" width="60%" height={24} />
+          <Skeleton variant="rectangular" width={40} height={20} />
+        </Box>
+        <Skeleton variant="text" width="100%" height={20} sx={{ mb: 1 }} />
+        <Skeleton variant="text" width="80%" height={20} sx={{ mb: 1.5 }} />
+        <Skeleton variant="text" width="50%" height={16} sx={{ mb: 0.5 }} />
+        <Skeleton variant="text" width="40%" height={16} sx={{ mb: 1.5 }} />
+        <Skeleton variant="rectangular" width="100%" height={6} />
+      </CardContent>
+    </Card>
+  ));
+};
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleCreateProject = async (projectData: Partial<Project>) => {
-    try {
-      await createProject(projectData);
-      await refreshData();
-      loadData();
-    } catch (error) {
-      console.error('Erro ao criar projeto:', error);
+const loadData = useCallback(async (showLoadingMessage = false) => {
+  try {
+    setLoading(true);
+    if (showLoadingMessage) {
+      showInfo('Carregando dados da planilha...');
     }
-  };
+    
+    const [inProgress, pending, notStarted, planning, stopped, completed] = await Promise.all([
+      getProjectsInProgress(),    // S2 - Em Andamento
+      getProjectsPending(),       // S4 - Pendências
+      getProjectsNotStarted(),    // S0 - Não iniciado
+      getProjectsInPlanning(),    // S1 - Em Planejamento
+      getProjectsStopped(),       // S3 - Parado
+      getProjectsCompleted()      // S6 - Concluído
+    ]);
+    
+    setProjectsInProgress(inProgress);
+    setProjectsPending(pending);
+    setProjectsNotStarted(notStarted);
+    setProjectsPlanning(planning);
+    setProjectsStopped(stopped);
+    setProjectsCompleted(completed);
+  } catch (error) {
+    console.error('Erro ao carregar projetos:', error);
+    showError('Erro ao carregar dados da planilha. Tente novamente.');
+  } finally {
+    setLoading(false);
+  }
+}, [showInfo, showError]);
+
+useEffect(() => {
+  loadData();
+}, [loadData]);
+
+const handleCreateProject = async (projectData: Partial<Project>) => {
+  try {
+    setIsCreating(true);
+    showInfo('Criando novo projeto...');
+    await createProject(projectData);
+    await refreshData();
+    await loadData();
+    showSuccess(`Projeto "${projectData.codigo || 'sem código'}" criado com sucesso!`);
+    setFormOpen(false); // Fecha o modal automaticamente
+  } catch (error) {
+    console.error('Erro ao criar projeto:', error);
+    showError('Erro ao criar projeto. Verifique os dados e tente novamente.');
+  } finally {
+    setIsCreating(false);
+  }
+};
 
 const handleUpdateProject = async (projectData: Partial<Project>) => {
   const projectToUpdate = editingProject || selectedProject;
   if (!projectToUpdate) return;
   
   try {
+    showInfo('Salvando alterações...');
     await updateProject(projectToUpdate.id, projectData);
     await refreshData();
-    loadData();
+    await loadData();
     setEditingProject(null);
     setDetailModalOpen(false);
     setSelectedProject(null);
+    showSuccess(`Projeto "${projectData.codigo || 'sem código'}" atualizado com sucesso!`);
   } catch (error) {
     console.error('Erro ao atualizar projeto:', error);
+    showError('Erro ao salvar alterações. Tente novamente.');
   }
 };
 
-  const handleRefresh = async () => {
+const handleRefresh = async () => {
+  try {
+    setIsRefreshing(true);
+    showInfo('Atualizando dados...');
     await refreshData();
-    loadData();
-  };
+    await loadData();
+    showSuccess('Dados atualizados com sucesso!');
+  } catch (error) {
+    console.error('Erro ao atualizar dados:', error);
+    showError('Erro ao atualizar dados. Tente novamente.');
+  } finally {
+    setIsRefreshing(false);
+  }
+};
 
 const handleProjectClick = (project: Project) => {
   setSelectedProject(project);
   setDetailModalOpen(true);
 };
 
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4">Carregando dados da planilha...</Typography>
-      </Container>
-    );
-  }
+if (loading) {
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Dashboard - Gestão de Projetos</Typography>
+        <Skeleton variant="rectangular" width={200} height={36} />
+      </Box>
+      
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <Card key={index} sx={{ flex: '1 1 200px', minWidth: '200px' }}>
+            <CardContent>
+              <Skeleton variant="text" width="80%" height={24} />
+              <Skeleton variant="text" width="60%" height={48} />
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+      
+      <Box sx={{ 
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateRows: 'repeat(2, 220px)',
+        gap: 2
+      }}>
+        {renderCardSkeletons()}
+      </Box>
+    </Container>
+  );
+}
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+  {/* Filtros */}
+  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+    <TextField
+      size="small"
+      placeholder="Buscar por código, cliente, descrição..."
+      value={searchQuery}
+      onChange={(e) => {
+        setSearchQuery(e.target.value);
+        setCurrentPage(0);
+      }}
+      sx={{ minWidth: 250 }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <Search fontSize="small" />
+          </InputAdornment>
+        ),
+        endAdornment: searchQuery && (
+          <InputAdornment position="end">
+            <IconButton size="small" onClick={() => setSearchQuery('')}>
+              <Clear fontSize="small" />
+            </IconButton>
+          </InputAdornment>
+        )
+      }}
+    />
+    
+    <FormControl size="small" sx={{ minWidth: 120 }}>
+      <InputLabel>Prioridade</InputLabel>
+      <Select
+        value={priorityFilter}
+        label="Prioridade"
+        onChange={(e) => {
+          setPriorityFilter(e.target.value);
+          setCurrentPage(0);
+        }}
+      >
+        <MenuItem value="">Todas</MenuItem>
+        {getUniquePriorities().map(priority => (
+          <MenuItem key={priority} value={priority.split(' ')[0]}>{priority}</MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+    
+    <FormControl size="small" sx={{ minWidth: 150 }}>
+      <InputLabel>Cliente</InputLabel>
+      <Select
+        value={clientFilter}
+        label="Cliente"
+        onChange={(e) => {
+          setClientFilter(e.target.value);
+          setCurrentPage(0);
+        }}
+      >
+        <MenuItem value="">Todos</MenuItem>
+        {getUniqueClients().map(client => (
+          <MenuItem key={client} value={client}>{client.length > 20 ? client.substring(0, 20) + '...' : client}</MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+    
+    {(searchQuery || priorityFilter || clientFilter) && (
+      <Button 
+        size="small" 
+        onClick={() => {
+          setSearchQuery('');
+          setPriorityFilter('');
+          setClientFilter('');
+          setCurrentPage(0);
+        }}
+      >
+        Limpar Filtros
+      </Button>
+    )}
+  </Box>
+    
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+      
+    </Box>
+  </Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">
           Dashboard - Gestão de Projetos
         </Typography>
         <Box>
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={handleRefresh}
-            sx={{ mr: 1 }}
-          >
-            Atualizar
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setFormOpen(true)}
-          >
-            Novo Projeto
-          </Button>
+<Button
+  variant="outlined"
+  startIcon={<Refresh />}
+  onClick={handleRefresh}
+  disabled={isRefreshing}
+  sx={{ mr: 1 }}
+>
+  {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+</Button>
+<Button
+  variant="contained"
+  startIcon={<Add />}
+  onClick={() => setFormOpen(true)}
+  disabled={isCreating}
+>
+  Novo Projeto
+</Button>
         </Box>
       </Box>
       
