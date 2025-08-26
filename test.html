@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste API</title>
+</head>
+<body>
+    <h1>Teste Criar Projeto</h1>
+    <button onclick="criarProjeto()">Criar Projeto Teste</button>
+    
+    <script>
+        async function criarProjeto() {
+            const projeto = {
+                nPedido: "1234",
+                cliente: "TESTE CLIENTE",
+                codigo: "TST001",
+                quantidade: "1",
+                descricao: "Projeto de teste criado via API",
+                prioridade: "P1 - Alta",
+                progresso: 25,
+                status: "S1 - Em Planejamento",
+                consultor: "SISTEMA"
+            };
+            
+            const response = await fetch('http://localhost:3001/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(projeto)
+            });
+            
+            const result = await response.json();
+            alert(JSON.stringify(result));
+        }
+    </script>
+</body>
+</html>
