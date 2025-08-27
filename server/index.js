@@ -111,13 +111,20 @@ function parseHistory(historyString) {
 }
 // Middlewares
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://dashboard-projetos.vercel.app']
+    : ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(morgan('combined'));
 app.use(express.json());
 
-// Configuração Google Sheets
 const auth = new google.auth.GoogleAuth({
-  keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  credentials: process.env.NODE_ENV === 'production' 
+    ? JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf-8'))
+    : undefined,
+  keyFile: process.env.NODE_ENV === 'production' ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
