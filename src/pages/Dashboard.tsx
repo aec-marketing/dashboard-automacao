@@ -6,9 +6,10 @@ import type { Project } from '../types';
 import ProjectForm from '../components/ProjectForm';
 import ProjectDetailModal from '../components/ProjectDetailModal.tsx';
 import { useNotification } from '../contexts/types';
-
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 function Dashboard() {
+  // Estados dos dados
   const [projectsInProgress, setProjectsInProgress] = useState<Project[]>([]);
   const [projectsPending, setProjectsPending] = useState<Project[]>([]);
   const [projectsNotStarted, setProjectsNotStarted] = useState<Project[]>([]);
@@ -17,374 +18,476 @@ function Dashboard() {
   const [projectsStopped, setProjectsStopped] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Estados para o formulário
+  // Estados da interface
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-
-  // Estado para paginação do carrossel
   const [currentPage, setCurrentPage] = useState(0);
-  const itemsPerPage = 6;
-  
-  // Estado para controle do status selecionado
   const [selectedStatus, setSelectedStatus] = useState('inProgress');
-  
-  // Estado para controle do modo de visualização
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
-
-// Estado para o modal de detalhes
-const [detailModalOpen, setDetailModalOpen] = useState(false);
-const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-const [isRefreshing, setIsRefreshing] = useState(false);
-const [isCreating, setIsCreating] = useState(false);
-const [searchQuery, setSearchQuery] = useState('');
-const [priorityFilter, setPriorityFilter] = useState<string>('');
-const [clientFilter, setClientFilter] = useState<string>('');
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  
+  // Estados de loading
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  
+  // Estados de filtros
+  const [searchQuery, setSearchQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [clientFilter, setClientFilter] = useState<string>('');
+  const [chartType, setChartType] = useState<'status' | 'priority' | 'progress'>('status');
+  
+  // Hooks
   const { showSuccess, showError, showInfo } = useNotification();
+  const itemsPerPage = 6;
 
-  // Função para obter todos os projetos (exceto concluídos)
-const getAllActiveProjects = () => {
-  const allProjects = [
-    ...projectsNotStarted,
-    ...projectsPlanning,
-    ...projectsInProgress,
-    ...projectsStopped,
-    ...projectsPending
-  ].sort((a, b) => {
-    // Ordenar por prioridade primeiro (P0 primeiro)
-    if (a.prioridade !== b.prioridade) {
-      return (a.prioridade || 'P2').localeCompare(b.prioridade || 'P2');
+  // Funções utilitárias
+  const getFilteredProjects = (projects: Project[]) => {
+    let filtered = projects;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(project => 
+        (project.codigo?.toLowerCase() || '').includes(query) ||
+        (project.cliente?.toLowerCase() || '').includes(query) ||
+        (project.descricao?.toLowerCase() || '').includes(query) ||
+        (project.nPedido?.toLowerCase() || '').includes(query)
+      );
     }
-    // Depois por status
-    return (a.status || '').localeCompare(b.status || '');
-  });
-  
-  return getFilteredProjects(allProjects);
-};
+    
+    if (priorityFilter) {
+      filtered = filtered.filter(project => 
+        project.prioridade?.includes(priorityFilter)
+      );
+    }
+    
+    if (clientFilter) {
+      filtered = filtered.filter(project => 
+        project.cliente?.toLowerCase().includes(clientFilter.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  };
 
-  // Função para obter projetos do status atual
-const getCurrentProjects = () => {
-  let projects: Project[] = [];
-  switch (selectedStatus) {
-    case 'notStarted': projects = projectsNotStarted; break;
-    case 'planning': projects = projectsPlanning; break;
-    case 'inProgress': projects = projectsInProgress; break;
-    case 'stopped': projects = projectsStopped; break;
-    case 'pending': projects = projectsPending; break;
-    default: projects = projectsInProgress;
-  }
-  
-  return getFilteredProjects(projects);
-};
-const getFilteredProjects = (projects: Project[]) => {
-  let filtered = projects;
-  
-  // Filtro de busca textual
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase().trim();
-    filtered = filtered.filter(project => 
-      (project.codigo?.toLowerCase() || '').includes(query) ||
-      (project.cliente?.toLowerCase() || '').includes(query) ||
-      (project.descricao?.toLowerCase() || '').includes(query) ||
-      (project.nPedido?.toLowerCase() || '').includes(query)
-    );
-  }
-  
-  // Filtro de prioridade
-  if (priorityFilter) {
-    filtered = filtered.filter(project => 
-      project.prioridade?.includes(priorityFilter)
-    );
-  }
-  
-  // Filtro de cliente
-  if (clientFilter) {
-    filtered = filtered.filter(project => 
-      project.cliente?.toLowerCase().includes(clientFilter.toLowerCase())
-    );
-  }
-  
-  return filtered;
-};
-const getUniquePriorities = () => {
-  const allProjects = [
-    ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
-    ...projectsStopped, ...projectsPending
-  ];
-  const priorities = [...new Set(allProjects.map(p => p.prioridade).filter(Boolean))];
-  return priorities.sort();
-};
+  const getAllActiveProjects = () => {
+    const allProjects = [
+      ...projectsNotStarted,
+      ...projectsPlanning,
+      ...projectsInProgress,
+      ...projectsStopped,
+      ...projectsPending
+    ].sort((a, b) => {
+      if (a.prioridade !== b.prioridade) {
+        return (a.prioridade || 'P2').localeCompare(b.prioridade || 'P2');
+      }
+      return (a.status || '').localeCompare(b.status || '');
+    });
+    
+    return getFilteredProjects(allProjects);
+  };
 
-const getUniqueClients = () => {
-  const allProjects = [
-    ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
-    ...projectsStopped, ...projectsPending
-  ];
-  const clients = [...new Set(allProjects.map(p => p.cliente).filter(Boolean))];
-  return clients.sort();
-};
-const renderCardSkeletons = () => {
-  return Array.from({ length: 6 }, (_, index) => (
-    <Card key={index} sx={{ height: '220px' }}>
-      <CardContent sx={{ height: '100%' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-          <Skeleton variant="text" width="60%" height={24} />
-          <Skeleton variant="rectangular" width={40} height={20} />
+  const getCurrentProjects = () => {
+    let projects: Project[] = [];
+    switch (selectedStatus) {
+      case 'notStarted': projects = projectsNotStarted; break;
+      case 'planning': projects = projectsPlanning; break;
+      case 'inProgress': projects = projectsInProgress; break;
+      case 'stopped': projects = projectsStopped; break;
+      case 'pending': projects = projectsPending; break;
+      default: projects = projectsInProgress;
+    }
+    
+    return getFilteredProjects(projects);
+  };
+
+  const getUniquePriorities = () => {
+    const allProjects = [
+      ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+      ...projectsStopped, ...projectsPending
+    ];
+    const priorities = [...new Set(allProjects.map(p => p.prioridade).filter(Boolean))];
+    return priorities.sort();
+  };
+
+  const getUniqueClients = () => {
+    const allProjects = [
+      ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+      ...projectsStopped, ...projectsPending
+    ];
+    const clients = [...new Set(allProjects.map(p => p.cliente).filter(Boolean))];
+    return clients.sort();
+  };
+
+  const calculateKPIs = () => {
+    const allProjects = [
+      ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+      ...projectsStopped, ...projectsPending, ...projectsCompleted
+    ];
+    
+    const completedProjects = projectsCompleted.filter(p => p.dataFim && p.entregaEstimada);
+    const onTimeProjects = completedProjects.filter(p => {
+      if (!p.dataFim || !p.entregaEstimada) return false;
+      const finishDate = new Date(p.dataFim);
+      const estimatedDate = new Date(p.entregaEstimada);
+      return finishDate <= estimatedDate;
+    });
+    const onTimeRate = completedProjects.length > 0 ? Math.round((onTimeProjects.length / completedProjects.length) * 100) : 0;
+    
+    const criticalProjects = [...projectsInProgress, ...projectsStopped, ...projectsPending]
+      .filter(p => p.prioridade?.includes('P0') || p.prioridade?.includes('P1'));
+    
+    const completedWithDates = projectsCompleted.filter(p => 
+      p.dataEntradaPlanejamento && p.dataFim
+    );
+    const avgDays = completedWithDates.length > 0 ? 
+      Math.round(completedWithDates.reduce((acc, p) => {
+        const start = new Date(p.dataEntradaPlanejamento);
+        const end = new Date(p.dataFim);
+        const days = Math.abs((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        return acc + days;
+      }, 0) / completedWithDates.length) : 0;
+    
+    return {
+      onTimeRate,
+      criticalProjects: criticalProjects.length,
+      avgDays,
+      totalActive: allProjects.length - projectsCompleted.length,
+      progressRate: Math.round((projectsCompleted.length / allProjects.length) * 100)
+    };
+  };
+
+  const getChartData = () => {
+    const activeProjects = [
+      ...projectsNotStarted, ...projectsPlanning, ...projectsInProgress,
+      ...projectsStopped, ...projectsPending
+    ];
+    
+    switch (chartType) {
+      case 'status':
+        return [
+          { name: 'Não Iniciados', value: projectsNotStarted.length, color: '#9e9e9e' },
+          { name: 'Planejamento', value: projectsPlanning.length, color: '#2196f3' },
+          { name: 'Em Andamento', value: projectsInProgress.length, color: '#4caf50' },
+          { name: 'Parados', value: projectsStopped.length, color: '#f44336' },
+          { name: 'Pendências', value: projectsPending.length, color: '#ff9800' }
+        ].filter(item => item.value > 0);
+        
+      case 'priority': {
+        const priorities = ['P0', 'P1', 'P2', 'P3', 'P4'];
+        const colors = ['#f44336', '#ff9800', '#2196f3', '#4caf50', '#9e9e9e'];
+        return priorities.map((priority, index) => ({
+          name: priority,
+          value: activeProjects.filter(p => p.prioridade?.includes(priority)).length,
+          color: colors[index]
+        })).filter(item => item.value > 0);
+      }
+        
+      case 'progress':
+        return [
+          { name: '0-25%', value: activeProjects.filter(p => (p.progresso || 0) <= 25).length, color: '#f44336' },
+          { name: '26-50%', value: activeProjects.filter(p => (p.progresso || 0) > 25 && (p.progresso || 0) <= 50).length, color: '#ff9800' },
+          { name: '51-75%', value: activeProjects.filter(p => (p.progresso || 0) > 50 && (p.progresso || 0) <= 75).length, color: '#2196f3' },
+          { name: '76-100%', value: activeProjects.filter(p => (p.progresso || 0) > 75).length, color: '#4caf50' }
+        ].filter(item => item.value > 0);
+        
+      default:
+        return [];
+    }
+  };
+
+  // Funções para indicadores visuais
+  const getPriorityColor = (prioridade: string) => {
+    if (prioridade.includes('P0')) return 'error';
+    if (prioridade.includes('P1')) return 'warning';
+    if (prioridade.includes('P2')) return 'info';
+    if (prioridade.includes('P3')) return 'success';
+    return 'default';
+  };
+
+  const getStatusIndicator = (project: Project) => {
+    // Projeto P0 com progresso baixo = crítico
+    if (project.prioridade?.includes('P0') && (project.progresso || 0) < 50) {
+      return { color: 'error', pulse: true };
+    }
+    // Projeto atrasado (sem data fim mas passou da estimada)
+    if (project.entregaEstimada && !project.dataFim) {
+      const today = new Date();
+      const estimated = new Date(project.entregaEstimada);
+      if (today > estimated) {
+        return { color: 'warning', pulse: false };
+      }
+    }
+    return null;
+  };
+
+  const renderCardSkeletons = () => {
+    return Array.from({ length: 6 }, (_, index) => (
+      <Card key={index} sx={{ height: '220px' }}>
+        <CardContent sx={{ height: '100%' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Skeleton variant="text" width="60%" height={24} />
+            <Skeleton variant="rectangular" width={40} height={20} />
+          </Box>
+          <Skeleton variant="text" width="100%" height={20} sx={{ mb: 1 }} />
+          <Skeleton variant="text" width="80%" height={20} sx={{ mb: 1.5 }} />
+          <Skeleton variant="text" width="50%" height={16} sx={{ mb: 0.5 }} />
+          <Skeleton variant="text" width="40%" height={16} sx={{ mb: 1.5 }} />
+          <Skeleton variant="rectangular" width="100%" height={6} />
+        </CardContent>
+      </Card>
+    ));
+  };
+
+  // Funções de dados
+  const loadData = useCallback(async (showLoadingMessage = false) => {
+    try {
+      setLoading(true);
+      if (showLoadingMessage) {
+        showInfo('Carregando dados da planilha...');
+      }
+      
+      const [inProgress, pending, notStarted, planning, stopped, completed] = await Promise.all([
+        getProjectsInProgress(),
+        getProjectsPending(),
+        getProjectsNotStarted(),
+        getProjectsInPlanning(),
+        getProjectsStopped(),
+        getProjectsCompleted()
+      ]);
+      
+      setProjectsInProgress(inProgress);
+      setProjectsPending(pending);
+      setProjectsNotStarted(notStarted);
+      setProjectsPlanning(planning);
+      setProjectsStopped(stopped);
+      setProjectsCompleted(completed);
+    } catch (error) {
+      console.error('Erro ao carregar projetos:', error);
+      showError('Erro ao carregar dados da planilha. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showInfo, showError]);
+
+  // Handlers de ações
+  const handleCreateProject = async (projectData: Partial<Project>) => {
+    try {
+      setIsCreating(true);
+      showInfo('Criando novo projeto...');
+      await createProject(projectData);
+      await refreshData();
+      await loadData();
+      showSuccess(`Projeto "${projectData.codigo || 'sem código'}" criado com sucesso!`);
+      setFormOpen(false);
+    } catch (error) {
+      console.error('Erro ao criar projeto:', error);
+      showError('Erro ao criar projeto. Verifique os dados e tente novamente.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleUpdateProject = async (projectData: Partial<Project>) => {
+    const projectToUpdate = editingProject || selectedProject;
+    if (!projectToUpdate) return;
+    
+    try {
+      showInfo('Salvando alterações...');
+      await updateProject(projectToUpdate.id, projectData);
+      await refreshData();
+      await loadData();
+      setEditingProject(null);
+      setDetailModalOpen(false);
+      setSelectedProject(null);
+      showSuccess(`Projeto "${projectData.codigo || 'sem código'}" atualizado com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao atualizar projeto:', error);
+      showError('Erro ao salvar alterações. Tente novamente.');
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      showInfo('Atualizando dados...');
+      await refreshData();
+      await loadData();
+      showSuccess('Dados atualizados com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+      showError('Erro ao atualizar dados. Tente novamente.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleProjectClick = (project: Project) => {
+    setSelectedProject(project);
+    setDetailModalOpen(true);
+  };
+
+  // Effects
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Render loading
+  if (loading) {
+    return (
+      <Box sx={{ 
+  width: '100vw',
+  display: 'flex', 
+  justifyContent: 'center',
+  px: 2,
+  mt: 4, 
+  mb: 4 
+}}>
+  <Box sx={{ 
+    width: '100%', 
+    maxWidth: '1200px'
+  }}>        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h4">Dashboard - Gestão de Projetos</Typography>
+          <Skeleton variant="rectangular" width={200} height={36} />
         </Box>
-        <Skeleton variant="text" width="100%" height={20} sx={{ mb: 1 }} />
-        <Skeleton variant="text" width="80%" height={20} sx={{ mb: 1.5 }} />
-        <Skeleton variant="text" width="50%" height={16} sx={{ mb: 0.5 }} />
-        <Skeleton variant="text" width="40%" height={16} sx={{ mb: 1.5 }} />
-        <Skeleton variant="rectangular" width="100%" height={6} />
-      </CardContent>
-    </Card>
-  ));
-};
-
-const loadData = useCallback(async (showLoadingMessage = false) => {
-  try {
-    setLoading(true);
-    if (showLoadingMessage) {
-      showInfo('Carregando dados da planilha...');
-    }
-    
-    const [inProgress, pending, notStarted, planning, stopped, completed] = await Promise.all([
-      getProjectsInProgress(),    // S2 - Em Andamento
-      getProjectsPending(),       // S4 - Pendências
-      getProjectsNotStarted(),    // S0 - Não iniciado
-      getProjectsInPlanning(),    // S1 - Em Planejamento
-      getProjectsStopped(),       // S3 - Parado
-      getProjectsCompleted()      // S6 - Concluído
-    ]);
-    
-    setProjectsInProgress(inProgress);
-    setProjectsPending(pending);
-    setProjectsNotStarted(notStarted);
-    setProjectsPlanning(planning);
-    setProjectsStopped(stopped);
-    setProjectsCompleted(completed);
-  } catch (error) {
-    console.error('Erro ao carregar projetos:', error);
-    showError('Erro ao carregar dados da planilha. Tente novamente.');
-  } finally {
-    setLoading(false);
+        
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
+          {Array.from({ length: 6 }, (_, index) => (
+            <Card key={index} sx={{ flex: '1 1 200px', minWidth: '200px' }}>
+              <CardContent>
+                <Skeleton variant="text" width="80%" height={24} />
+                <Skeleton variant="text" width="60%" height={48} />
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+        
+        <Box sx={{ 
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateRows: 'repeat(2, 220px)',
+          gap: 2
+        }}>
+          {renderCardSkeletons()}
+        </Box>
+  </Box>
+</Box>
+    );
   }
-}, [showInfo, showError]);
 
-useEffect(() => {
-  loadData();
-}, [loadData]);
-
-const handleCreateProject = async (projectData: Partial<Project>) => {
-  try {
-    setIsCreating(true);
-    showInfo('Criando novo projeto...');
-    await createProject(projectData);
-    await refreshData();
-    await loadData();
-    showSuccess(`Projeto "${projectData.codigo || 'sem código'}" criado com sucesso!`);
-    setFormOpen(false); // Fecha o modal automaticamente
-  } catch (error) {
-    console.error('Erro ao criar projeto:', error);
-    showError('Erro ao criar projeto. Verifique os dados e tente novamente.');
-  } finally {
-    setIsCreating(false);
-  }
-};
-
-const handleUpdateProject = async (projectData: Partial<Project>) => {
-  const projectToUpdate = editingProject || selectedProject;
-  if (!projectToUpdate) return;
-  
-  try {
-    showInfo('Salvando alterações...');
-    await updateProject(projectToUpdate.id, projectData);
-    await refreshData();
-    await loadData();
-    setEditingProject(null);
-    setDetailModalOpen(false);
-    setSelectedProject(null);
-    showSuccess(`Projeto "${projectData.codigo || 'sem código'}" atualizado com sucesso!`);
-  } catch (error) {
-    console.error('Erro ao atualizar projeto:', error);
-    showError('Erro ao salvar alterações. Tente novamente.');
-  }
-};
-
-const handleRefresh = async () => {
-  try {
-    setIsRefreshing(true);
-    showInfo('Atualizando dados...');
-    await refreshData();
-    await loadData();
-    showSuccess('Dados atualizados com sucesso!');
-  } catch (error) {
-    console.error('Erro ao atualizar dados:', error);
-    showError('Erro ao atualizar dados. Tente novamente.');
-  } finally {
-    setIsRefreshing(false);
-  }
-};
-
-const handleProjectClick = (project: Project) => {
-  setSelectedProject(project);
-  setDetailModalOpen(true);
-};
-
-if (loading) {
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4, px: { xs: 2, sm: 3 } }}>      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Dashboard - Gestão de Projetos</Typography>
-        <Skeleton variant="rectangular" width={200} height={36} />
-      </Box>
-      
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-        {Array.from({ length: 6 }, (_, index) => (
-          <Card key={index} sx={{ flex: '1 1 200px', minWidth: '200px' }}>
-            <CardContent>
-              <Skeleton variant="text" width="80%" height={24} />
-              <Skeleton variant="text" width="60%" height={48} />
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
-      
-      <Box sx={{ 
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gridTemplateRows: 'repeat(2, 220px)',
-        gap: 2
-      }}>
-        {renderCardSkeletons()}
-      </Box>
-    </Container>
-  );
-}
-
-  return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-  {/* Filtros */}
-  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-    <TextField
-      size="small"
-      placeholder="Buscar por código, cliente, descrição..."
-      value={searchQuery}
-      onChange={(e) => {
-        setSearchQuery(e.target.value);
-        setCurrentPage(0);
-      }}
-      sx={{ minWidth: 250 }}
-      InputProps={{
-        startAdornment: (
-          <InputAdornment position="start">
-            <Search fontSize="small" />
-          </InputAdornment>
-        ),
-        endAdornment: searchQuery && (
-          <InputAdornment position="end">
-            <IconButton size="small" onClick={() => setSearchQuery('')}>
-              <Clear fontSize="small" />
-            </IconButton>
-          </InputAdornment>
-        )
-      }}
-    />
-    
-    <FormControl size="small" sx={{ minWidth: 120 }}>
-      <InputLabel>Prioridade</InputLabel>
-      <Select
-        value={priorityFilter}
-        label="Prioridade"
-        onChange={(e) => {
-          setPriorityFilter(e.target.value);
-          setCurrentPage(0);
-        }}
-      >
-        <MenuItem value="">Todas</MenuItem>
-        {getUniquePriorities().map(priority => (
-          <MenuItem key={priority} value={priority.split(' ')[0]}>{priority}</MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-    
-    <FormControl size="small" sx={{ minWidth: 150 }}>
-      <InputLabel>Cliente</InputLabel>
-      <Select
-        value={clientFilter}
-        label="Cliente"
-        onChange={(e) => {
-          setClientFilter(e.target.value);
-          setCurrentPage(0);
-        }}
-      >
-        <MenuItem value="">Todos</MenuItem>
-        {getUniqueClients().map(client => (
-          <MenuItem key={client} value={client}>{client.length > 20 ? client.substring(0, 20) + '...' : client}</MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-    
-    {(searchQuery || priorityFilter || clientFilter) && (
-      <Button 
-        size="small" 
-        onClick={() => {
-          setSearchQuery('');
-          setPriorityFilter('');
-          setClientFilter('');
-          setCurrentPage(0);
-        }}
-      >
-        Limpar Filtros
-      </Button>
-    )}
-  </Box>
-    
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-      
-    </Box>
-  </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">
-          Dashboard - Gestão de Projetos
-        </Typography>
         <Box>
-<Button
-  variant="outlined"
-  startIcon={<Refresh />}
-  onClick={handleRefresh}
-  disabled={isRefreshing}
-  sx={{ mr: 1 }}
->
-  {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-</Button>
-<Button
-  variant="contained"
-  startIcon={<Add />}
-  onClick={() => setFormOpen(true)}
-  disabled={isCreating}
->
-  Novo Projeto
-</Button>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            sx={{ mr: 1 }}
+          >
+            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setFormOpen(true)}
+            disabled={isCreating}
+          >
+            Novo Projeto
+          </Button>
         </Box>
       </Box>
-      
-      {/* Cards de estatísticas - usando Flexbox */}
+
+      {/* Filtros */}
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 3 }}>
+        <TextField
+          size="small"
+          placeholder="Buscar por código, cliente, descrição..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setCurrentPage(0);
+          }}
+          sx={{ minWidth: 250 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                  <Clear fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            )
+          }}
+        />
+        
+        <FormControl size="small" sx={{ minWidth: 120 }}>
+          <InputLabel>Prioridade</InputLabel>
+          <Select
+            value={priorityFilter}
+            label="Prioridade"
+            onChange={(e) => {
+              setPriorityFilter(e.target.value);
+              setCurrentPage(0);
+            }}
+          >
+            <MenuItem value="">Todas</MenuItem>
+            {getUniquePriorities().map(priority => (
+              <MenuItem key={priority} value={priority.split(' ')[0]}>{priority}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <InputLabel>Cliente</InputLabel>
+          <Select
+            value={clientFilter}
+            label="Cliente"
+            onChange={(e) => {
+              setClientFilter(e.target.value);
+              setCurrentPage(0);
+            }}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {getUniqueClients().map(client => (
+              <MenuItem key={client} value={client}>
+                {client.length > 20 ? client.substring(0, 20) + '...' : client}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        {(searchQuery || priorityFilter || clientFilter) && (
+          <Button 
+            size="small" 
+            onClick={() => {
+              setSearchQuery('');
+              setPriorityFilter('');
+              setClientFilter('');
+              setCurrentPage(0);
+            }}
+          >
+            Limpar Filtros
+          </Button>
+        )}
+      </Box>
+
+      {/* Cards Executivos */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
         <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
           <CardContent>
-            <Typography variant="h6">Não Iniciados</Typography>
-            <Typography variant="h3" color="text.secondary">
-              {projectsNotStarted.length}
+            <Typography variant="h6">Projetos Ativos</Typography>
+            <Typography variant="h3" color="primary">
+              {calculateKPIs().totalActive}
             </Typography>
-          </CardContent>
-        </Card>
-        
-        <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
-          <CardContent>
-            <Typography variant="h6">Em Planejamento</Typography>
-            <Typography variant="h3" color="info.main">
-              {projectsPlanning.length}
+            <Typography variant="caption" color="text.secondary">
+              {projectsCompleted.length} concluídos
             </Typography>
           </CardContent>
         </Card>
@@ -392,43 +495,109 @@ if (loading) {
         <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
           <CardContent>
             <Typography variant="h6">Em Andamento</Typography>
-            <Typography variant="h3" color="primary">
+            <Typography variant="h3" color="success.main">
               {projectsInProgress.length}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {projectsStopped.length} parados
+            </Typography>
           </CardContent>
         </Card>
         
         <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
           <CardContent>
-            <Typography variant="h6">Parados</Typography>
+            <Typography variant="h6">Críticos</Typography>
             <Typography variant="h3" color="error.main">
-              {projectsStopped.length}
+              {calculateKPIs().criticalProjects}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              P0 e P1 pendentes
             </Typography>
           </CardContent>
         </Card>
         
         <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
           <CardContent>
-            <Typography variant="h6">Pendências</Typography>
-            <Typography variant="h3" color="warning.main">
-              {projectsPending.length}
+            <Typography variant="h6">Taxa no Prazo</Typography>
+            <Typography variant="h3" color={calculateKPIs().onTimeRate >= 80 ? "success.main" : "warning.main"}>
+              {calculateKPIs().onTimeRate}%
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Projetos entregues no prazo
             </Typography>
           </CardContent>
         </Card>
         
         <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
           <CardContent>
-            <Typography variant="h6">Concluídos</Typography>
-            <Typography variant="h3" color="success.main">
-              {projectsCompleted.length}
+            <Typography variant="h6">Progresso Geral</Typography>
+            <Typography variant="h3" color="info.main">
+              {calculateKPIs().progressRate}%
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Do portfólio concluído
+            </Typography>
+          </CardContent>
+        </Card>
+        
+        <Card sx={{ flex: '1 1 200px', minWidth: '200px' }}>
+          <CardContent>
+            <Typography variant="h6">Tempo Médio</Typography>
+            <Typography variant="h3" color="text.secondary">
+              {calculateKPIs().avgDays}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              dias para conclusão
             </Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* Seção de projetos com seletor de status ou lista completa */}
-      <Box sx={{ mt: 4 }}>
-        {/* Toggle entre Cards e Lista */}
+      {/* Seção de Gráficos */}
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h5">Análise Visual</Typography>
+          <ToggleButtonGroup
+            value={chartType}
+            exclusive
+            onChange={(_, newType) => newType && setChartType(newType)}
+            size="small"
+          >
+            <ToggleButton value="status">Status</ToggleButton>
+            <ToggleButton value="priority">Prioridade</ToggleButton>
+            <ToggleButton value="progress">Progresso</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        
+        <Card>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={getChartData()}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value, percent }) => `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {getChartData().map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Seção de Projetos */}
+      <Box>
+        {/* Controles */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
             <ToggleButtonGroup
@@ -437,7 +606,7 @@ if (loading) {
               onChange={(_, newViewMode) => {
                 if (newViewMode !== null) {
                   setViewMode(newViewMode);
-                  setCurrentPage(0); // Reset página ao trocar modo
+                  setCurrentPage(0);
                 }
               }}
               size="small"
@@ -513,10 +682,9 @@ if (loading) {
           </Box>
         </Box>
 
-        {/* Renderização condicional: Cards ou Lista */}
+        {/* Conteúdo: Cards ou Lista */}
         {viewMode === 'cards' ? (
           <>
-            {/* Container do carrossel */}
             <Box sx={{ 
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
@@ -525,45 +693,51 @@ if (loading) {
               overflow: 'hidden'
             }}>
               {getCurrentProjects().slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).map((project) => {
-                console.log('Debug - Projeto:', project.id, project.codigo);
-                
-                const getPriorityColor = (prioridade: string) => {
-                  if (prioridade.includes('P0')) return 'error';
-                  if (prioridade.includes('P1')) return 'warning';
-                  if (prioridade.includes('P2')) return 'info';
-                  if (prioridade.includes('P3')) return 'success';
-                  return 'default';
-                };
-                
                 return (
                   <Card 
-  key={project.id} 
-  onClick={() => handleProjectClick(project)}
-  sx={{ 
-    height: '220px',
-    cursor: 'pointer',
-    '&:hover': { 
-      boxShadow: 4, 
-      transform: 'translateY(-2px)',
-      transition: 'all 0.2s ease-in-out'
-    }
-  }}
->
+                    key={project.id} 
+                    onClick={() => handleProjectClick(project)}
+                    sx={{ 
+                      height: '220px',
+                      cursor: 'pointer',
+                      '&:hover': { 
+                        boxShadow: 4, 
+                        transform: 'translateY(-2px)',
+                        transition: 'all 0.2s ease-in-out'
+                      }
+                    }}
+                  >
                     <CardContent sx={{ pb: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                      {/* Header com código e prioridade */}
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                         <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
                           {project.codigo || 'Sem código'}
                         </Typography>
-                        <Chip 
-                          label={project.prioridade || 'P2'} 
-                          color={getPriorityColor(project.prioridade || 'P2')}
-                          size="small"
-                          variant="filled"
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {getStatusIndicator(project) && (
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: `${getStatusIndicator(project)?.color}.main`,
+                                animation: getStatusIndicator(project)?.pulse ? 'pulse 2s infinite' : 'none',
+                                '@keyframes pulse': {
+                                  '0%': { opacity: 1 },
+                                  '50%': { opacity: 0.5 },
+                                  '100%': { opacity: 1 }
+                                }
+                              }}
+                            />
+                          )}
+                          <Chip 
+                            label={project.prioridade || 'P2'} 
+                            color={getPriorityColor(project.prioridade || 'P2')}
+                            size="small"
+                            variant="filled"
+                          />
+                        </Box>
                       </Box>
                       
-                      {/* Descrição do projeto - limitada */}
                       <Typography 
                         variant="body2" 
                         sx={{ 
@@ -579,7 +753,6 @@ if (loading) {
                         {project.descricao || 'Sem descrição'}
                       </Typography>
                       
-                      {/* Informações compactas */}
                       <Box sx={{ mb: 1.5 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           <strong>Cliente:</strong> {(project.cliente || 'Sem cliente').substring(0, 20)}
@@ -590,7 +763,6 @@ if (loading) {
                         </Typography>
                       </Box>
                       
-                      {/* Barra de progresso compacta */}
                       <Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                           <Typography variant="caption" color="text.secondary">
@@ -612,7 +784,6 @@ if (loading) {
               })}
             </Box>
             
-            {/* Indicador de página para cards */}
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, gap: 1 }}>
               {Array.from({ length: Math.ceil(getCurrentProjects().length / itemsPerPage) }, (_, index) => (
                 <Box 
@@ -630,7 +801,6 @@ if (loading) {
             </Box>
           </>
         ) : (
-          /* Modo Lista */
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>
@@ -645,14 +815,6 @@ if (loading) {
               </TableHead>
               <TableBody>
                 {getAllActiveProjects().map((project) => {
-                  const getPriorityColor = (prioridade: string) => {
-                    if (prioridade?.includes('P0')) return 'error';
-                    if (prioridade?.includes('P1')) return 'warning';
-                    if (prioridade?.includes('P2')) return 'info';
-                    if (prioridade?.includes('P3')) return 'success';
-                    return 'default';
-                  };
-
                   const getStatusLabel = (status: string) => {
                     if (status?.includes('S0')) return 'Não Iniciado';
                     if (status?.includes('S1')) return 'Planejamento';
@@ -664,11 +826,11 @@ if (loading) {
 
                   return (
                     <TableRow 
-  key={project.id} 
-  hover 
-  onClick={() => handleProjectClick(project)}
-  sx={{ cursor: 'pointer' }}
->
+                      key={project.id} 
+                      hover 
+                      onClick={() => handleProjectClick(project)}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>{project.codigo || 'N/A'}</TableCell>
                       <TableCell>{project.cliente || 'N/A'}</TableCell>
                       <TableCell>
@@ -679,11 +841,30 @@ if (loading) {
                         />
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={project.prioridade || 'P2'} 
-                          color={getPriorityColor(project.prioridade)}
-                          size="small"
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {getStatusIndicator(project) && (
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: `${getStatusIndicator(project)?.color}.main`,
+                                animation: getStatusIndicator(project)?.pulse ? 'pulse 2s infinite' : 'none',
+                                '@keyframes pulse': {
+                                  '0%': { opacity: 1 },
+                                  '50%': { opacity: 0.5 },
+                                  '100%': { opacity: 1 }
+                                }
+                              }}
+                            />
+                          )}
+                          <Chip 
+                            label={project.prioridade || 'P2'} 
+                            color={getPriorityColor(project.prioridade || 'P2')}
+                            size="small"
+                            variant="filled"
+                          />
+                        </Box>
                       </TableCell>
                       <TableCell sx={{ maxWidth: '300px' }}>
                         <Typography variant="body2" noWrap>
@@ -711,27 +892,27 @@ if (loading) {
         )}
       </Box>
 
-{/* Modal de detalhes do projeto */}
-<ProjectDetailModal
-  open={detailModalOpen}
-  onClose={() => {
-    setDetailModalOpen(false);
-    setSelectedProject(null);
-  }}
-  onUpdate={handleUpdateProject}
-  project={selectedProject}
-/>
-{/* Formulário de projeto */}
-<ProjectForm
-  open={formOpen}
-  onClose={() => {
-    setFormOpen(false);
-    setEditingProject(null);
-  }}
-  onSubmit={handleCreateProject}
-  project={null}
-  title="Novo Projeto"
-/>
+      {/* Modals */}
+      <ProjectDetailModal
+        open={detailModalOpen}
+        onClose={() => {
+          setDetailModalOpen(false);
+          setSelectedProject(null);
+        }}
+        onUpdate={handleUpdateProject}
+        project={selectedProject}
+      />
+
+      <ProjectForm
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingProject(null);
+        }}
+        onSubmit={handleCreateProject}
+        project={null}
+        title="Novo Projeto"
+      />
     </Container>
   );
 }

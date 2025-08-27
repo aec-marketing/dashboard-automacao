@@ -20,10 +20,10 @@ import {
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
-import { Edit, Close, Delete, Add } from '@mui/icons-material';
+import { Edit, Close, Delete, Add, ContentCopy } from '@mui/icons-material';
 import type { Project } from '../types';
 import { deleteProject } from '../services/api';
-
+import { createProject, refreshData } from '../services/api';
 interface ProjectDetailModalProps {
   open: boolean;
   onClose: () => void;
@@ -73,7 +73,7 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
   
   const [newHistoryNote, setNewHistoryNote] = useState('');
   const [showHistoryForm, setShowHistoryForm] = useState(false);
-
+const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
   // Atualiza os dados quando o projeto muda
   useEffect(() => {
     if (project && open) {
@@ -183,7 +183,37 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
     if (prioridade?.includes('P3')) return 'success';
     return 'default';
   };
-
+const handleDuplicate = async () => {
+  if (!project) return;
+  
+  const duplicatedProject = {
+    nPedido: project.nPedido || '',
+    cliente: project.cliente || '',
+    codigo: `${project.codigo}_COPY`,
+    quantidade: project.quantidade || '',
+    descricao: project.descricao || '',
+    prioridade: project.prioridade || 'P2 - Normal',
+    progresso: 0,
+    status: 'S0 - Não iniciado',
+    dataEntradaPlanejamento: project.dataEntradaPlanejamento || '',
+    entregaEstimada: project.entregaEstimada || '',
+    dataInicio: '',
+    dataFim: '',
+    consultor: project.consultor || '',
+    faturado: '',
+    observacao: project.observacao ? `[DUPLICADO] ${project.observacao}` : '[DUPLICADO]',
+    historico: ''
+  };
+  
+  try {
+    await createProject(duplicatedProject);
+    await refreshData();
+    setShowDuplicateConfirm(false);
+    onClose(); // Fecha o modal após duplicar
+  } catch (error) {
+    console.error('Erro ao duplicar projeto:', error);
+  }
+};
   const getStatusLabel = (status: string) => {
     if (status?.includes('S0')) return 'Não Iniciado';
     if (status?.includes('S1')) return 'Planejamento';
@@ -205,16 +235,19 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
               {isEditing ? 'Editando Projeto' : 'Detalhes do Projeto'}
             </Typography>
             <Box>
-              {!isEditing && (
-                <>
-                  <IconButton onClick={() => setIsEditing(true)} color="primary">
-                    <Edit />
-                  </IconButton>
-                  <IconButton onClick={() => setDeleteDialogOpen(true)} color="error">
-                    <Delete />
-                  </IconButton>
-                </>
-              )}
+{!isEditing && (
+  <>
+    <IconButton onClick={() => setIsEditing(true)} color="primary">
+      <Edit />
+    </IconButton>
+    <IconButton onClick={() => setShowDuplicateConfirm(true)} color="info">
+      <ContentCopy />
+    </IconButton>
+    <IconButton onClick={() => setDeleteDialogOpen(true)} color="error">
+      <Delete />
+    </IconButton>
+  </>
+)}
               <IconButton onClick={handleClose}>
                 <Close />
               </IconButton>
@@ -737,7 +770,25 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
           )}
         </DialogActions>
       </Dialog>
-
+{/* Dialog de confirmação de duplicação */}
+<Dialog open={showDuplicateConfirm} onClose={() => setShowDuplicateConfirm(false)}>
+  <DialogTitle>Duplicar Projeto</DialogTitle>
+  <DialogContent>
+    <DialogContentText>
+      Deseja criar uma cópia do projeto <strong>{project?.codigo}</strong>?
+      <br />
+      A cópia terá progresso zerado e status "Não iniciado".
+    </DialogContentText>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setShowDuplicateConfirm(false)}>
+      Cancelar
+    </Button>
+    <Button onClick={handleDuplicate} variant="contained" startIcon={<ContentCopy />}>
+      Duplicar
+    </Button>
+  </DialogActions>
+</Dialog>
       {/* Dialog de confirmação de exclusão */}
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>Confirmar Exclusão</DialogTitle>
