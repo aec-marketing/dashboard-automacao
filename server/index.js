@@ -112,10 +112,34 @@ function parseHistory(historyString) {
 // Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://dashboard-projetos.vercel.app']
-    : ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true
+  origin: function (origin, callback) {
+    // Permite requisições sem origin (apps mobile, Postman, etc)
+    if (!origin) return callback(null, true);
+    
+    if (process.env.NODE_ENV === 'production') {
+      // URLs permitidas em produção - USANDO A URL CORRETA DO VERCEL
+      const allowedOrigins = [
+        'https://dashboard-automacao.vercel.app',
+        /^https:\/\/dashboard-automacao.*\.vercel\.app$/
+      ];
+      
+      // Verifica se a origin está na lista
+      const isAllowed = allowedOrigins.some(allowedOrigin => {
+        if (typeof allowedOrigin === 'string') {
+          return allowedOrigin === origin;
+        }
+        return allowedOrigin.test(origin);
+      });
+      
+      return callback(null, isAllowed);
+    } else {
+      // Em desenvolvimento, permite localhost
+      return callback(null, ['http://localhost:5173', 'http://localhost:3000'].includes(origin));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 app.use(morgan('combined'));
 app.use(express.json());

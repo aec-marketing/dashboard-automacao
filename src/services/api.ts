@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { Project } from '../types';
 
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'https://dashboard-projetos-api.onrender.com/api'
+  ? 'https://dashboard-automacao-api.onrender.com/api'
   : 'http://localhost:3001/api';
 
 export const api = axios.create({
