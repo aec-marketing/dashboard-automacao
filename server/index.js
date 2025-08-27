@@ -113,15 +113,18 @@ function parseHistory(historyString) {
 app.use(helmet());
 app.use(cors({
   origin: function (origin, callback) {
-    // Permite requisições sem origin (apps mobile, Postman, etc)
-    if (!origin) return callback(null, true);
+    // Permite requisições sem origin (apps mobile, Postman, arquivo local, etc)
+    if (!origin || origin === 'null') return callback(null, true);
     
-    if (process.env.NODE_ENV === 'production') {
-      // URLs permitidas em produção - USANDO A URL CORRETA DO VERCEL
-      const allowedOrigins = [
-        'https://dashboard-automacao.vercel.app',
-        /^https:\/\/dashboard-automacao.*\.vercel\.app$/
-      ];
+// ADICIONE após as outras origens permitidas:
+if (process.env.NODE_ENV === 'production') {
+  // URLs permitidas em produção
+  const allowedOrigins = [
+    'https://dashboard-automacao.vercel.app',
+    /^https:\/\/dashboard-automacao.*\.vercel\.app$/,
+    'tizen://com.automacao.dashboard',  // Para app Tizen
+    null  // Para requests sem origin (apps nativos)
+  ];
       
       // Verifica se a origin está na lista
       const isAllowed = allowedOrigins.some(allowedOrigin => {
@@ -132,10 +135,12 @@ app.use(cors({
       });
       
       return callback(null, isAllowed);
-    } else {
-      // Em desenvolvimento, permite localhost
-      return callback(null, ['http://localhost:5173', 'http://localhost:3000'].includes(origin));
-    }
+} else {
+  // Em desenvolvimento, permite localhost e arquivos locais
+  const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000', null];
+  return callback(null, allowedOrigins.includes(origin));
+}
+    
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
