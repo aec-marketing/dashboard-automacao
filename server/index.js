@@ -113,39 +113,43 @@ function parseHistory(historyString) {
 app.use(helmet());
 app.use(cors({
   origin: function (origin, callback) {
-    // Permite requisições sem origin (apps mobile, Postman, arquivo local, etc)
-    if (!origin || origin === 'null') return callback(null, true);
-    
-// ADICIONE após as outras origens permitidas:
-if (process.env.NODE_ENV === 'production') {
-  // URLs permitidas em produção
-  const allowedOrigins = [
-    'https://dashboard-automacao.vercel.app',
-    /^https:\/\/dashboard-automacao.*\.vercel\.app$/,
-    'tizen://com.automacao.dashboard',  // Para app Tizen
-    null  // Para requests sem origin (apps nativos)
-  ];
-      
-      // Verifica se a origin está na lista
+    if (!origin || origin === 'null') {
+      // Permite apps Tizen sem origin
+      return callback(null, true);
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      const allowedOrigins = [
+        'https://dashboard-automacao.vercel.app',
+        /^https:\/\/dashboard-automacao.*\.vercel\.app$/,
+        // Pode manter esse, mas ele provavelmente nunca vai bater
+        'tizen://auto123456.DashboardTV' 
+      ];
+
       const isAllowed = allowedOrigins.some(allowedOrigin => {
         if (typeof allowedOrigin === 'string') {
           return allowedOrigin === origin;
         }
         return allowedOrigin.test(origin);
       });
-      
+
       return callback(null, isAllowed);
-} else {
-  // Em desenvolvimento, permite localhost e arquivos locais
-  const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000', null];
-  return callback(null, allowedOrigins.includes(origin));
-}
-    
+    } else {
+      const allowedOrigins = [
+        'http://localhost:5173', 
+        'http://localhost:3000',
+        'http://127.0.0.1:5500',
+        'http://localhost:5500',
+        null
+      ];
+      return callback(null, allowedOrigins.includes(origin));
+    }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
 app.use(morgan('combined'));
 app.use(express.json());
 
