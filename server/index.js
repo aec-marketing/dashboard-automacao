@@ -12,19 +12,21 @@ const COLUMN_MAPPING = {
   nPedido: 'A',
   cliente: 'B', 
   codigo: 'C',
-  quantidade: 'D',
-  descricao: 'E',
-  prioridade: 'F',
-  progresso: 'G',
-  status: 'H',
-  dataEntradaPlanejamento: 'I',
-  entregaEstimada: 'J',
-  dataInicio: 'K',
-  dataFim: 'L',
-  consultor: 'M',
-  faturado: 'N',
-  observacao: 'O',
-  historico: 'P'
+  organizacaoPedidos: 'D',  // Nova coluna 
+  quantidade: 'E',          // Moveu de D para E
+  categoria: 'F',           // Moveu de E para F
+  descricao: 'G',           // Nova coluna 
+  prioridade: 'H',          // Moveu de F para H
+  progresso: 'I',           // Moveu de G para I
+  status: 'J',              // Moveu de H para J
+  dataEntradaPlanejamento: 'K', // Moveu de I para K
+  entregaEstimada: 'L',         // Moveu de J para L
+  dataInicio: 'M',              // Moveu de K para M
+  dataFim: 'N',                 // Moveu de L para N
+  consultor: 'O',               // Moveu de M para O
+  faturado: 'P',                // Moveu de N para P
+  observacao: 'Q',              // Moveu de O para Q
+  historico: 'R'                // Moveu de P para R
 };
 
 // Função utilitária para converter letra da coluna em índice
@@ -184,7 +186,9 @@ async function fetchSheetsData() {
       nPedido: row[columnToIndex(COLUMN_MAPPING.nPedido)] || '',
       cliente: row[columnToIndex(COLUMN_MAPPING.cliente)] || '',
       codigo: row[columnToIndex(COLUMN_MAPPING.codigo)] || '',
+      organizacaoPedidos: row[columnToIndex(COLUMN_MAPPING.organizacaoPedidos)] || '',
       quantidade: row[columnToIndex(COLUMN_MAPPING.quantidade)] || '',
+      categoria: row[columnToIndex(COLUMN_MAPPING.categoria)] || '',
       descricao: row[columnToIndex(COLUMN_MAPPING.descricao)] || '',
       prioridade: row[columnToIndex(COLUMN_MAPPING.prioridade)] || '',
       progresso: parseInt(row[columnToIndex(COLUMN_MAPPING.progresso)]) || 0,
@@ -196,7 +200,7 @@ async function fetchSheetsData() {
       consultor: row[columnToIndex(COLUMN_MAPPING.consultor)] || '',
       faturado: row[columnToIndex(COLUMN_MAPPING.faturado)] || '',
       observacao: row[columnToIndex(COLUMN_MAPPING.observacao)] || '',
-      historico: row[columnToIndex(COLUMN_MAPPING.historico)] || ''  // <- ADICIONE ESTA LINHA
+      historico: row[columnToIndex(COLUMN_MAPPING.historico)] || ''
     }));
   } catch (error) {
     console.error('Erro ao buscar dados do Google Sheets:', error);
@@ -289,7 +293,9 @@ async function addProjectToSheet(projectData) {
       projectData.nPedido,
       projectData.cliente,
       projectData.codigo,
+      projectData.organizacaoPedidos,
       projectData.quantidade,
+      projectData.categoria,
       projectData.descricao,
       projectData.prioridade,
       projectData.progresso,
@@ -300,7 +306,8 @@ async function addProjectToSheet(projectData) {
       convertDateToBR(projectData.dataFim),
       projectData.consultor,
       projectData.faturado,
-      projectData.observacao
+      projectData.observacao,
+      projectData.historico || ''
     ]];
 
 const range = generateRange(newRowIndex);
@@ -331,7 +338,9 @@ async function updateProjectInSheet(rowIndex, projectData) {
       projectData.nPedido,
       projectData.cliente,
       projectData.codigo,
+      projectData.organizacaoPedidos,
       projectData.quantidade,
+      projectData.categoria,
       projectData.descricao,
       projectData.prioridade,
       projectData.progresso,
@@ -415,7 +424,9 @@ app.post('/api/projects', async (req, res) => {
       nPedido: req.body.nPedido || '',
       cliente: req.body.cliente || '',
       codigo: req.body.codigo || '',
+      organizacaoPedidos: req.body.organizacaoPedidos || '',
       quantidade: req.body.quantidade || '',
+      categoria: req.body.categoria || '',
       descricao: req.body.descricao || '',
       prioridade: req.body.prioridade || 'P2 - Normal',
       progresso: req.body.progresso || 0,
@@ -427,7 +438,7 @@ app.post('/api/projects', async (req, res) => {
       consultor: req.body.consultor || '',
       faturado: req.body.faturado || '',
       observacao: req.body.observacao || '',
-      historico: req.body.historico || ''      
+      historico: req.body.historico || ''
     };
 
     await addProjectToSheet(projectData);
@@ -442,20 +453,22 @@ app.post('/api/projects', async (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    
+
     // Buscar o projeto atual para pegar o rowIndex
     const currentData = await getCachedData();
     const project = currentData.find(p => p.id === projectId);
-    
+
     if (!project) {
       return res.status(404).json({ error: 'Projeto não encontrado' });
     }
-    
+
     const projectData = {
       nPedido: req.body.nPedido || '',
       cliente: req.body.cliente || '',
       codigo: req.body.codigo || '',
+      organizacaoPedidos: req.body.organizacaoPedidos || '',
       quantidade: req.body.quantidade || '',
+      categoria: req.body.categoria || '',
       descricao: req.body.descricao || '',
       prioridade: req.body.prioridade || 'P2 - Normal',
       progresso: req.body.progresso || 0,
@@ -468,7 +481,6 @@ app.put('/api/projects/:id', async (req, res) => {
       faturado: req.body.faturado || '',
       observacao: req.body.observacao || '',
       historico: req.body.historico || ''
-
     };
 
     await updateProjectInSheet(project.rowIndex, projectData);

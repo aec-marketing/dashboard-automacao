@@ -4,8 +4,10 @@ export interface Project {
   nPedido: string;
   cliente: string;
   codigo: string;
+  organizacaoPedidos: string; // Novo campo
   quantidade: string;
   descricao: string;
+  categoria: string; // Novo campo
   prioridade: string;
   progresso: number;
   status: string;
