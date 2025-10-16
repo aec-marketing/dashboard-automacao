@@ -56,7 +56,9 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
     nPedido: '',
     cliente: '',
     codigo: '',
+    organizacaoPedidos: '',
     quantidade: '',
+    categoria: '',
     descricao: '',
     prioridade: 'P2 - Normal',
     progresso: 0,
@@ -81,7 +83,9 @@ const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
         nPedido: project.nPedido || '',
         cliente: project.cliente || '',
         codigo: project.codigo || '',
+        organizacaoPedidos: project.organizacaoPedidos || '',
         quantidade: project.quantidade || '',
+        categoria: project.categoria || '',
         descricao: project.descricao || '',
         prioridade: project.prioridade || 'P2 - Normal',
         progresso: project.progresso || 0,
@@ -129,7 +133,9 @@ const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
         nPedido: project.nPedido || '',
         cliente: project.cliente || '',
         codigo: project.codigo || '',
+        organizacaoPedidos: project.organizacaoPedidos || '',
         quantidade: project.quantidade || '',
+        categoria: project.categoria || '',
         descricao: project.descricao || '',
         prioridade: project.prioridade || 'P2 - Normal',
         progresso: project.progresso || 0,
@@ -185,12 +191,14 @@ const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
   };
 const handleDuplicate = async () => {
   if (!project) return;
-  
+
   const duplicatedProject = {
     nPedido: project.nPedido || '',
     cliente: project.cliente || '',
     codigo: `${project.codigo}_COPY`,
+    organizacaoPedidos: project.organizacaoPedidos || '',
     quantidade: project.quantidade || '',
+    categoria: project.categoria || '',
     descricao: project.descricao || '',
     prioridade: project.prioridade || 'P2 - Normal',
     progresso: 0,
@@ -204,7 +212,7 @@ const handleDuplicate = async () => {
     observacao: project.observacao ? `[DUPLICADO] ${project.observacao}` : '[DUPLICADO]',
     historico: ''
   };
-  
+
   try {
     await createProject(duplicatedProject);
     await refreshData();
@@ -328,14 +336,21 @@ const handleDuplicate = async () => {
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {formData.cliente || 'Não informado'}
                     </Typography>
-                    
+
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                       N° Pedido
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {formData.nPedido || 'Não informado'}
                     </Typography>
-                    
+
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Organização de Pedidos
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {formData.organizacaoPedidos || 'Não informado'}
+                    </Typography>
+
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                       Quantidade
                     </Typography>
@@ -343,15 +358,22 @@ const handleDuplicate = async () => {
                       {formData.quantidade || 'Não informado'}
                     </Typography>
                   </Grid>
-                  
+
                   <Grid size={{ xs: 12, md: 6 }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Categoria
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {formData.categoria || 'Não informado'}
+                    </Typography>
+
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                       Consultor
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {formData.consultor || 'Não informado'}
                     </Typography>
-                    
+
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                       Faturado
                     </Typography>
@@ -498,18 +520,25 @@ const handleDuplicate = async () => {
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
                         fullWidth
+                        label="Organização de Pedidos"
+                        value={formData.organizacaoPedidos}
+                        onChange={(e) => handleChange('organizacaoPedidos', e.target.value)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <TextField
+                        fullWidth
                         label="Quantidade"
                         value={formData.quantidade}
                         onChange={(e) => handleChange('quantidade', e.target.value)}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, md: 8 }}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
                         fullWidth
-                        label="Cliente"
-                        value={formData.cliente}
-                        onChange={(e) => handleChange('cliente', e.target.value)}
-                        required
+                        label="Categoria"
+                        value={formData.categoria}
+                        onChange={(e) => handleChange('categoria', e.target.value)}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
@@ -518,6 +547,15 @@ const handleDuplicate = async () => {
                         label="Consultor"
                         value={formData.consultor}
                         onChange={(e) => handleChange('consultor', e.target.value)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        fullWidth
+                        label="Cliente"
+                        value={formData.cliente}
+                        onChange={(e) => handleChange('cliente', e.target.value)}
+                        required
                       />
                     </Grid>
                     <Grid size={{ xs: 12 }}>

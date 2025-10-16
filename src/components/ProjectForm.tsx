@@ -45,59 +45,65 @@ const priorityOptions = [
 ];
 
 function ProjectForm({ open, onClose, onSubmit, project, title }: ProjectFormProps) {
-  const [formData, setFormData] = useState({
-    nPedido: '',
-    cliente: '',
-    codigo: '',
-    quantidade: '',
-    descricao: '',
-    prioridade: 'P2 - Normal',
-    progresso: 0,
-    status: 'S0 - Não iniciado',
-    dataEntradaPlanejamento: '',
-    entregaEstimada: '',
-    consultor: '',
-    observacao: '',
-    historico: ''
-  });
+const [formData, setFormData] = useState({
+  nPedido: '',
+  cliente: '',
+  codigo: '',
+  organizacaoPedidos: '', // Novo campo
+  quantidade: '',
+  descricao: '',
+  categoria: '', // Novo campo
+  prioridade: 'P2 - Normal',
+  progresso: 0,
+  status: 'S0 - Não iniciado',
+  dataEntradaPlanejamento: '',
+  entregaEstimada: '',
+  consultor: '',
+  observacao: '',
+  historico: ''
+});
 
   const [newHistoryNote, setNewHistoryNote] = useState('');
   const [showHistoryForm, setShowHistoryForm] = useState(false);
 
   // Atualiza o formulário quando o projeto muda ou quando o modal abre
-  useEffect(() => {
-    if (project && open) {
-      setFormData({
-        nPedido: project.nPedido || '',
-        cliente: project.cliente || '',
-        codigo: project.codigo || '',
-        quantidade: project.quantidade || '',
-        descricao: project.descricao || '',
-        prioridade: project.prioridade || 'P2 - Normal',
-        progresso: project.progresso || 0,
-        status: project.status || 'S0 - Não iniciado',
-        dataEntradaPlanejamento: project.dataEntradaPlanejamento || '',
-        entregaEstimada: project.entregaEstimada || '',
-        consultor: project.consultor || '',
-        observacao: project.observacao || '',
-        historico: project.historico || ''
-      });
+useEffect(() => {
+  if (project && open) {
+    setFormData({
+      nPedido: project.nPedido || '',
+      cliente: project.cliente || '',
+      codigo: project.codigo || '',
+      organizacaoPedidos: project.organizacaoPedidos || '', // Novo campo
+      quantidade: project.quantidade || '',
+      descricao: project.descricao || '',
+      categoria: project.categoria || '', // Novo campo
+      prioridade: project.prioridade || 'P2 - Normal',
+      progresso: project.progresso || 0,
+      status: project.status || 'S0 - Não iniciado',
+      dataEntradaPlanejamento: project.dataEntradaPlanejamento || '',
+      entregaEstimada: project.entregaEstimada || '',
+      consultor: project.consultor || '',
+      observacao: project.observacao || '',
+      historico: project.historico || ''
+    });
     } else if (!project && open) {
       // Reset para projeto novo
       setFormData({
-        nPedido: '',
-        cliente: '',
-        codigo: '',
-        quantidade: '',
-        descricao: '',
-        prioridade: 'P2 - Normal',
-        progresso: 0,
-        status: 'S0 - Não iniciado',
-        dataEntradaPlanejamento: '',
-        entregaEstimada: '',
-        consultor: '',
-        observacao: '',
-        historico: ''
+  nPedido: '',
+  cliente: '',
+  codigo: '',
+  organizacaoPedidos: '', // Novo campo
+  quantidade: '',
+  descricao: '',
+  categoria: '', // Novo campo
+  prioridade: 'P2 - Normal',
+  progresso: 0,
+  status: 'S0 - Não iniciado',
+  dataEntradaPlanejamento: '',
+  entregaEstimada: '',
+  consultor: '',
+  observacao: '',
+  historico: ''
       });
     }
   }, [project, open]);
@@ -166,18 +172,25 @@ function ProjectForm({ open, onClose, onSubmit, project, title }: ProjectFormPro
                 <Grid size={{ xs: 12, md: 4 }}>
                   <TextField
                     fullWidth
+                    label="Organização de Pedidos"
+                    value={formData.organizacaoPedidos}
+                    onChange={(e) => handleChange('organizacaoPedidos', e.target.value)}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    fullWidth
                     label="Quantidade"
                     value={formData.quantidade}
                     onChange={(e) => handleChange('quantidade', e.target.value)}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 8 }}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <TextField
                     fullWidth
-                    label="Cliente"
-                    value={formData.cliente}
-                    onChange={(e) => handleChange('cliente', e.target.value)}
-                    required
+                    label="Categoria"
+                    value={formData.categoria}
+                    onChange={(e) => handleChange('categoria', e.target.value)}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
@@ -186,6 +199,15 @@ function ProjectForm({ open, onClose, onSubmit, project, title }: ProjectFormPro
                     label="Consultor"
                     value={formData.consultor}
                     onChange={(e) => handleChange('consultor', e.target.value)}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Cliente"
+                    value={formData.cliente}
+                    onChange={(e) => handleChange('cliente', e.target.value)}
+                    required
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
