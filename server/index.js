@@ -38,8 +38,10 @@ function columnToIndex(column) {
 function generateRange(rowIndex) {
   const columns = Object.values(COLUMN_MAPPING);
   const firstCol = columns[0]; // A
-  const lastCol = columns[columns.length - 1]; // O
-  return `01-PAINEL DE CONTROLE!${firstCol}${rowIndex}:${lastCol}${rowIndex}`;
+  const lastCol = columns[columns.length - 1]; // R
+  const range = `01-PAINEL DE CONTROLE!${firstCol}${rowIndex}:${lastCol}${rowIndex}`;
+  console.log('Range gerado:', range, '- Colunas:', firstCol, 'até', lastCol);
+  return range;
 }
 
 const app = express();
@@ -173,12 +175,19 @@ const CACHE_DURATION = 5 * 60 * 1000;
 // Função para buscar dados do Google Sheets
 async function fetchSheetsData() {
   try {
+    console.log('Buscando dados com range:', process.env.GOOGLE_SHEETS_RANGE);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
       range: process.env.GOOGLE_SHEETS_RANGE,
     });
-    
+
     const rows = response.data.values || [];
+    console.log('Número de linhas retornadas:', rows.length);
+    if (rows.length > 0) {
+      console.log('Número de colunas na primeira linha:', rows[0].length);
+      console.log('Exemplo - Observação (coluna Q, índice 16):', rows[0][16]);
+      console.log('Exemplo - Histórico (coluna R, índice 17):', rows[0][17]);
+    }
     
     return rows.map((row, index) => ({
       id: index + 1,
