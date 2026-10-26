@@ -20,8 +20,13 @@ import {
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
-import { Edit, Close, Delete, Add, ContentCopy } from '@mui/icons-material';
+import Edit from '@mui/icons-material/Edit';
+import Close from '@mui/icons-material/Close';
+import Delete from '@mui/icons-material/Delete';
+import Add from '@mui/icons-material/Add';
+import ContentCopy from '@mui/icons-material/ContentCopy';
 import type { Project } from '../types';
+import { STATUS_VALUES, PRIORITY_VALUES, formatDateBR } from '../domain/status';
 import { deleteProject } from '../services/api';
 import { createProject, refreshData } from '../services/api';
 interface ProjectDetailModalProps {
@@ -32,22 +37,9 @@ interface ProjectDetailModalProps {
   project: Project | null;
 }
 
-const statusOptions = [
-  'S0 - Não iniciado',
-  'S1 - Em Planejamento',
-  'S2 - Em Andamento',
-  'S3 - Parado',
-  'S4 - Pendências externas',
-  'S6 - Concluído'
-];
-
-const priorityOptions = [
-  'P0 - Urgente',
-  'P1 - Alta',
-  'P2 - Normal',
-  'P3 - Baixa',
-  'P4 - Mínima'
-];
+// Opções de status e prioridade vêm de uma fonte única (src/domain/status.ts)
+const statusOptions = STATUS_VALUES;
+const priorityOptions = PRIORITY_VALUES;
 
 function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: ProjectDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -404,7 +396,7 @@ const handleDuplicate = async () => {
                         Entrada Planejamento
                       </Typography>
                       <Typography variant="body2">
-                        {formData.dataEntradaPlanejamento || 'Não informado'}
+                        {formatDateBR(formData.dataEntradaPlanejamento) || 'Não informado'}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 6, md: 3 }}>
@@ -412,7 +404,7 @@ const handleDuplicate = async () => {
                         Entrega Estimada
                       </Typography>
                       <Typography variant="body2">
-                        {formData.entregaEstimada || 'Não informado'}
+                        {formatDateBR(formData.entregaEstimada) || 'Não informado'}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 6, md: 3 }}>
@@ -420,7 +412,7 @@ const handleDuplicate = async () => {
                         Data Início
                       </Typography>
                       <Typography variant="body2">
-                        {formData.dataInicio || 'Não informado'}
+                        {formatDateBR(formData.dataInicio) || 'Não informado'}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 6, md: 3 }}>
@@ -428,7 +420,7 @@ const handleDuplicate = async () => {
                         Data Fim
                       </Typography>
                       <Typography variant="body2">
-                        {formData.dataFim || 'Não informado'}
+                        {formatDateBR(formData.dataFim) || 'Não informado'}
                       </Typography>
                     </Grid>
                   </Grid>

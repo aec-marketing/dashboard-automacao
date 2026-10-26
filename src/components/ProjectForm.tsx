@@ -15,9 +15,10 @@ import {
   Divider
 } from '@mui/material';
 import { Grid } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import Add from '@mui/icons-material/Add';
 
 import type { Project } from '../types';
+import { STATUS_VALUES, PRIORITY_VALUES } from '../domain/status';
 
 interface ProjectFormProps {
   open: boolean;
@@ -27,22 +28,9 @@ interface ProjectFormProps {
   title: string;
 }
 
-const statusOptions = [
-  'S0 - Não iniciado',
-  'S1 - Em Planejamento',
-  'S2 - Em Andamento',
-  'S3 - Parado',
-  'S4 - Pendências externas',
-  'S6 - Concluído'
-];
-
-const priorityOptions = [
-  'P0 - Urgente',
-  'P1 - Alta',
-  'P2 - Normal',
-  'P3 - Baixa',
-  'P4 - Mínima'
-];
+// Opções de status e prioridade vêm de uma fonte única (src/domain/status.ts)
+const statusOptions = STATUS_VALUES;
+const priorityOptions = PRIORITY_VALUES;
 
 function ProjectForm({ open, onClose, onSubmit, project, title }: ProjectFormProps) {
 const [formData, setFormData] = useState({
