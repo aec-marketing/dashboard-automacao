@@ -19,4 +19,5 @@ export interface Project {
   faturado: string;
   observacao: string;
   historico: string;
+  estadoProjeto?: string; // Resumo livre do estado (máx. 30 caracteres); coluna S da planilha
 }

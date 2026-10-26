@@ -70,7 +70,8 @@ function ProjectDetailModal({ open, onClose, onUpdate, onDelete, project }: Proj
     consultor: '',
     faturado: '',
     observacao: '',
-    historico: ''
+    historico: '',
+    estadoProjeto: ''
   });
   
   const [newHistoryNote, setNewHistoryNote] = useState('');
@@ -97,7 +98,8 @@ const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
         consultor: project.consultor || '',
         faturado: project.faturado || '',
         observacao: project.observacao || '',
-        historico: project.historico || ''
+        historico: project.historico || '',
+        estadoProjeto: project.estadoProjeto || ''
       });
       setIsEditing(false);
     }
@@ -147,7 +149,8 @@ const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
         consultor: project.consultor || '',
         faturado: project.faturado || '',
         observacao: project.observacao || '',
-        historico: project.historico || ''
+        historico: project.historico || '',
+        estadoProjeto: project.estadoProjeto || ''
       });
     }
     setIsEditing(false);
@@ -379,6 +382,13 @@ const handleDuplicate = async () => {
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {formData.faturado || 'Não informado'}
+                    </Typography>
+
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Estado do projeto
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {formData.estadoProjeto || 'Não informado'}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -634,6 +644,17 @@ const handleDuplicate = async () => {
                           <MenuItem value="Parcial">Parcial</MenuItem>
                         </Select>
                       </FormControl>
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="Estado do projeto"
+                        value={formData.estadoProjeto}
+                        onChange={(e) => handleChange('estadoProjeto', e.target.value)}
+                        inputProps={{ maxLength: 30 }}
+                        placeholder="Ex.: Montagem Elétrica, Compras"
+                        helperText={`${formData.estadoProjeto.length}/30 · aparece na TV`}
+                      />
                     </Grid>
                   </Grid>
                 </Box>

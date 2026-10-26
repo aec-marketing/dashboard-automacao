@@ -60,7 +60,8 @@ const [formData, setFormData] = useState({
   entregaEstimada: '',
   consultor: '',
   observacao: '',
-  historico: ''
+  historico: '',
+  estadoProjeto: ''
 });
 
   const [newHistoryNote, setNewHistoryNote] = useState('');
@@ -84,7 +85,8 @@ useEffect(() => {
       entregaEstimada: project.entregaEstimada || '',
       consultor: project.consultor || '',
       observacao: project.observacao || '',
-      historico: project.historico || ''
+      historico: project.historico || '',
+      estadoProjeto: project.estadoProjeto || ''
     });
     } else if (!project && open) {
       // Reset para projeto novo
@@ -103,7 +105,8 @@ useEffect(() => {
   entregaEstimada: '',
   consultor: '',
   observacao: '',
-  historico: ''
+  historico: '',
+  estadoProjeto: ''
       });
     }
   }, [project, open]);
@@ -270,6 +273,17 @@ useEffect(() => {
                     onChange={(e) => handleChange('progresso', parseInt(e.target.value) || 0)}
                     inputProps={{ min: 0, max: 100 }}
                     helperText={`${formData.progresso}% concluído`}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Estado do projeto"
+                    value={formData.estadoProjeto}
+                    onChange={(e) => handleChange('estadoProjeto', e.target.value)}
+                    inputProps={{ maxLength: 30 }}
+                    placeholder="Ex.: Montagem Elétrica, Compras, Esperando Espelho"
+                    helperText={`${formData.estadoProjeto.length}/30 · aparece na TV`}
                   />
                 </Grid>
               </Grid>

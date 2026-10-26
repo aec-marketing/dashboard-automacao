@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
 
@@ -26,8 +27,19 @@ const COLUMN_MAPPING = {
   consultor: 'O',               // Moveu de M para O
   faturado: 'P',                // Moveu de N para P
   observacao: 'Q',              // Moveu de O para Q
-  historico: 'R'                // Moveu de P para R
+  historico: 'R',               // Moveu de P para R
+  estadoProjeto: 'S'            // Nova coluna: resumo livre do estado (ex.: "Montagem Elétrica"), máx. 30 caracteres
 };
+
+// Limite do "Estado do projeto" (cabe numa linha na TV)
+const ESTADO_MAX = 30;
+function cleanEstado(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, ESTADO_MAX);
+}
+
+// Intervalo de leitura derivado do mapeamento (última coluna = a última do COLUMN_MAPPING).
+// Não depende mais de GOOGLE_SHEETS_RANGE: assim, uma coluna nova não fica "invisível" por causa de uma variável desatualizada.
+const SHEET_READ_RANGE = `01-PAINEL DE CONTROLE!A9:${Object.values(COLUMN_MAPPING).slice(-1)[0]}1000`;
 
 // Função utilitária para converter letra da coluna em índice
 function columnToIndex(column) {
@@ -115,6 +127,7 @@ function parseHistory(historyString) {
 }
 // Middlewares
 app.use(helmet());
+app.use(compression());
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || origin === 'null') {
@@ -175,10 +188,10 @@ const CACHE_DURATION = 5 * 60 * 1000;
 // Função para buscar dados do Google Sheets
 async function fetchSheetsData() {
   try {
-    console.log('Buscando dados com range:', process.env.GOOGLE_SHEETS_RANGE);
+    console.log('Buscando dados com range:', SHEET_READ_RANGE);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-      range: process.env.GOOGLE_SHEETS_RANGE,
+      range: SHEET_READ_RANGE,
     });
 
     const rows = response.data.values || [];
@@ -209,7 +222,8 @@ async function fetchSheetsData() {
       consultor: row[columnToIndex(COLUMN_MAPPING.consultor)] || '',
       faturado: row[columnToIndex(COLUMN_MAPPING.faturado)] || '',
       observacao: row[columnToIndex(COLUMN_MAPPING.observacao)] || '',
-      historico: row[columnToIndex(COLUMN_MAPPING.historico)] || ''
+      historico: row[columnToIndex(COLUMN_MAPPING.historico)] || '',
+      estadoProjeto: row[columnToIndex(COLUMN_MAPPING.estadoProjeto)] || ''
     }));
   } catch (error) {
     console.error('Erro ao buscar dados do Google Sheets:', error);
@@ -224,6 +238,69 @@ async function getCachedData() {
     lastFetch = now;
   }
   return cachedData;
+}
+
+// ===== Dados enxutos para a TV (GET /api/tv) =====
+// Só os projetos ativos (S1 a S5) e só os campos que a TV usa (~6 KB, contra ~120 KB de /api/projects).
+// A resposta nunca espera o Google Sheets quando já existe cache: devolve o que tem e atualiza em segundo plano.
+const LOGOS_CACHE_DURATION = 10 * 60 * 1000;
+let tvLogos = {};
+let logosFetch = 0;
+let tvRefreshing = null;
+
+// Logos dos clientes: aba "01.1-DADOS", coluna K (EMPRESA) -> coluna J (LOGOS PARA VISUAL PCP)
+async function fetchLogos() {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEETS_ID,
+      range: "'01.1-DADOS'!J1:K300",
+    });
+    const map = {};
+    (response.data.values || []).forEach(([logo, empresa]) => {
+      const name = String(empresa || '').trim();
+      const url = String(logo || '').trim();
+      if (name && name !== 'EMPRESA' && /^https?:\/\//i.test(url)) map[name] = url;
+    });
+    return map;
+  } catch (error) {
+    console.error('Erro ao buscar logos:', error);
+    return null; // mantém o cache anterior
+  }
+}
+
+function refreshTvData() {
+  if (!tvRefreshing) {
+    tvRefreshing = (async () => {
+      const [rows, logos] = await Promise.all([fetchSheetsData(), fetchLogos()]);
+      if (rows.length > 0 || cachedData.length === 0) { cachedData = rows; lastFetch = Date.now(); } // erro de leitura não apaga o cache bom
+      if (logos) { tvLogos = logos; logosFetch = Date.now(); }
+    })().finally(() => { tvRefreshing = null; });
+  }
+  return tvRefreshing;
+}
+
+function toTvProject(p) {
+  const codigo = String(p.codigo || '').trim();
+  return {
+    cliente: String(p.cliente).trim(),
+    codigo: codigo === '-' ? '' : codigo,
+    descricao: String(p.descricao).trim().replace(/\s+/g, ' '),
+    prio: String(p.prioridade).slice(0, 2),
+    prog: p.progresso,
+    st: String(p.status).slice(0, 2),
+    entrega: p.entregaEstimada,
+    consultor: String(p.consultor).trim(),
+    pedido: String(p.nPedido).trim(),
+    estado: String(p.estadoProjeto).trim(),
+    entrada: p.dataEntradaPlanejamento,
+    inicio: p.dataInicio,
+    fim: p.dataFim,
+    categoria: String(p.categoria).replace(/\s+/g, ' ').trim(),
+    qtd: String(p.quantidade).trim(),
+    faturado: String(p.faturado).trim(),
+    obs: String(p.observacao).replace(/\s+/g, ' ').trim(),
+    hist: parseHistory(p.historico),
+  };
 }
 
 // Função para encontrar a última linha com dados
@@ -316,7 +393,8 @@ async function addProjectToSheet(projectData) {
       projectData.consultor,
       projectData.faturado,
       projectData.observacao,
-      projectData.historico || ''
+      projectData.historico || '',
+      cleanEstado(projectData.estadoProjeto)
     ]];
 
 const range = generateRange(newRowIndex);
@@ -361,7 +439,8 @@ async function updateProjectInSheet(rowIndex, projectData) {
       projectData.consultor,
       projectData.faturado,
       projectData.observacao,
-      projectData.historico || ''
+      projectData.historico || '',
+      cleanEstado(projectData.estadoProjeto)
     ]];
 
 const range = generateRange(rowIndex);
@@ -416,6 +495,26 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
+// Dados enxutos para a TV: projetos ativos + logos dos clientes (vindas da planilha)
+app.get('/api/tv', async (req, res) => {
+  try {
+    const now = Date.now();
+    const stale = now - lastFetch > CACHE_DURATION || now - logosFetch > LOGOS_CACHE_DURATION;
+    if (cachedData.length === 0) {
+      await refreshTvData();            // primeira carga: precisa esperar
+    } else if (stale) {
+      refreshTvData();                  // depois: responde já com o cache e atualiza por trás
+    }
+    const projects = cachedData
+      .filter(p => /^S[1-5]/.test(p.status))
+      .map(toTvProject);
+    res.json({ updated: new Date(lastFetch || now).toISOString(), projects, logos: tvLogos });
+  } catch (error) {
+    console.error('Erro na rota /api/tv:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 app.post('/api/refresh', async (req, res) => {
   try {
     cachedData = await fetchSheetsData();
@@ -447,7 +546,8 @@ app.post('/api/projects', async (req, res) => {
       consultor: req.body.consultor || '',
       faturado: req.body.faturado || '',
       observacao: req.body.observacao || '',
-      historico: req.body.historico || ''
+      historico: req.body.historico || '',
+      estadoProjeto: cleanEstado(req.body.estadoProjeto)
     };
 
     await addProjectToSheet(projectData);
@@ -489,7 +589,8 @@ app.put('/api/projects/:id', async (req, res) => {
       consultor: req.body.consultor || '',
       faturado: req.body.faturado || '',
       observacao: req.body.observacao || '',
-      historico: req.body.historico || ''
+      historico: req.body.historico || '',
+      estadoProjeto: cleanEstado(req.body.estadoProjeto)
     };
 
     await updateProjectInSheet(project.rowIndex, projectData);
