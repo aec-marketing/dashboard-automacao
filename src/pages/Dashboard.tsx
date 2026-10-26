@@ -30,7 +30,10 @@ const TABS = [
   { key: 'S3', label: 'Parados' },
   { key: 'S0', label: 'Não iniciados' },
   { key: 'all', label: 'Todos os abertos' },
+  { key: 'S6', label: 'Concluídos' },
 ] as const;
+
+const DONE_PAGE = 50; // concluídos são centenas: mostra aos poucos para a página continuar leve
 
 // Cores só da paleta A&C (azuis e neutros; amarelo e laranja só onde há atenção)
 const STATUS_COLORS: Record<string, string> = { S0: '#9AA3B8', S1: '#6C84C4', S2: '#233A79', S3: '#EB5C3D', S4: '#FDC30B', S5: '#8C6E00' };
@@ -67,24 +70,41 @@ function Dashboard() {
 
   // ---- derivados (calculados uma vez por mudança, não a cada renderização) ----
   const open = useMemo(() => projects.filter(p => OPEN_CODES.includes(statusCode(p.status))), [projects]);
-  const clients = useMemo(() => [...new Set(open.map(p => p.cliente?.trim()).filter(Boolean))].sort() as string[], [open]);
+  const done = useMemo(() => projects.filter(p => statusCode(p.status) === 'S6'), [projects]);
+  const isDoneTab = tab === 'S6';
+  const clients = useMemo(
+    () => [...new Set((isDoneTab ? done : open).map(p => p.cliente?.trim()).filter(Boolean))].sort() as string[],
+    [open, done, isDoneTab],
+  );
 
-  const filtered = useMemo(() => {
+  const applyFilters = (list: Project[]) => {
     const q = search.trim().toLowerCase();
-    return open
+    return list
       .filter(p => !priority || priorityCode(p.prioridade) === priority)
       .filter(p => !client || p.cliente?.trim() === client)
-      .filter(p => !q || [p.codigo, p.cliente, p.descricao, p.nPedido, p.consultor, p.estadoProjeto].some(v => (v || '').toLowerCase().includes(q)))
-      .sort(comparePriority);
-  }, [open, search, priority, client]);
+      .filter(p => !q || [p.codigo, p.cliente, p.descricao, p.nPedido, p.consultor, p.estadoProjeto].some(v => (v || '').toLowerCase().includes(q)));
+  };
+
+  const filtered = useMemo(() => applyFilters(open).sort(comparePriority), [open, search, priority, client]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Concluídos: os mais recentes primeiro
+  const filteredDone = useMemo(
+    () => applyFilters(done).sort((a, b) => (b.dataFim || b.entregaEstimada || '').localeCompare(a.dataFim || a.entregaEstimada || '')),
+    [done, search, priority, client], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const countBy = useMemo(() => {
-    const c: Record<string, number> = { all: filtered.length };
+    const c: Record<string, number> = { all: filtered.length, S6: filteredDone.length };
     filtered.forEach(p => { const k = statusCode(p.status); c[k] = (c[k] || 0) + 1; });
     return c;
-  }, [filtered]);
+  }, [filtered, filteredDone]);
 
-  const visible = useMemo(() => (tab === 'all' ? filtered : filtered.filter(p => statusCode(p.status) === tab)), [filtered, tab]);
+  const [shown, setShown] = useState(DONE_PAGE);
+  useEffect(() => { setShown(DONE_PAGE); }, [tab, search, priority, client]);
+
+  const visible = useMemo(
+    () => (isDoneTab ? filteredDone : tab === 'all' ? filtered : filtered.filter(p => statusCode(p.status) === tab)),
+    [isDoneTab, filteredDone, filtered, tab],
+  );
 
   const kpis = useMemo(() => {
     const active = projects.filter(p => ACTIVE_CODES.includes(statusCode(p.status)));
@@ -107,7 +127,7 @@ function Dashboard() {
 
   const segments: Segment[] = useMemo(() => {
     if (chart === 'status') {
-      return TABS.filter(t => t.key !== 'all').map(t => ({
+      return TABS.filter(t => t.key !== 'all' && t.key !== 'S6').map(t => ({
         key: t.key, label: t.label, color: STATUS_COLORS[t.key],
         value: open.filter(p => statusCode(p.status) === t.key).length,
         onClick: () => setTab(t.key),
@@ -215,10 +235,12 @@ function Dashboard() {
               />
             ))}
           </Tabs>
-          <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => v && setView(v)} aria-label="Modo de exibição" sx={{ mb: 0.5 }}>
-            <ToggleButton value="cards" aria-label="Cartões"><ViewModuleIcon fontSize="small" sx={{ mr: 0.75 }} />Cartões</ToggleButton>
-            <ToggleButton value="list" aria-label="Lista"><ViewListIcon fontSize="small" sx={{ mr: 0.75 }} />Lista</ToggleButton>
-          </ToggleButtonGroup>
+          {!isDoneTab && (
+            <ToggleButtonGroup value={view} exclusive size="small" onChange={(_, v) => v && setView(v)} aria-label="Modo de exibição" sx={{ mb: 0.5 }}>
+              <ToggleButton value="cards" aria-label="Cartões"><ViewModuleIcon fontSize="small" sx={{ mr: 0.75 }} />Cartões</ToggleButton>
+              <ToggleButton value="list" aria-label="Lista"><ViewListIcon fontSize="small" sx={{ mr: 0.75 }} />Lista</ToggleButton>
+            </ToggleButtonGroup>
+          )}
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', py: 2 }}>
@@ -265,6 +287,18 @@ function Dashboard() {
             </Typography>
             {hasFilters && <Button variant="outlined" onClick={clearFilters}>Limpar filtros</Button>}
           </Paper>
+        ) : isDoneTab ? (
+          <>
+            <ProjectTable mode="done" projects={visible.slice(0, shown)} onOpen={setSelected} />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" className="num">
+                Mostrando {Math.min(shown, visible.length)} de {visible.length} · mais recentes primeiro
+              </Typography>
+              {visible.length > shown && (
+                <Button variant="outlined" onClick={() => setShown(s => s + DONE_PAGE)}>Mostrar mais {Math.min(DONE_PAGE, visible.length - shown)}</Button>
+              )}
+            </Box>
+          </>
         ) : view === 'cards' ? (
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 380px), 1fr))', gap: 2 }}>
             {visible.map(p => <ProjectCard key={p.id} project={p} showStatus={tab === 'all'} onOpen={setSelected} />)}
